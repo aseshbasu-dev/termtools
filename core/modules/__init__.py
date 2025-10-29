@@ -11,12 +11,14 @@ from .project_templates import project_templates_bp
 from .power_manager import power_manager_bp
 from .python_env import python_env_bp
 from .cleanup import cleanup_bp
+from .git_operations import git_operations_bp
 
 __all__ = [
     'project_templates_bp',
     'power_manager_bp', 
     'python_env_bp',
-    'cleanup_bp'
+    'cleanup_bp',
+    'git_operations_bp'
 ]
 
 

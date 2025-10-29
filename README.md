@@ -48,6 +48,9 @@ TermTools/
 
 ## 📋 Available Modules
 
+### 🔧 Git Operations
+- **1**: Quick Commit & Push (add, commit, and push in one command)
+
 ###  Python Environment Management  
 - **2**: Delete and recreate .venv (with activation instructions)
 - **3**: Create new requirements.txt file (choose from templates)

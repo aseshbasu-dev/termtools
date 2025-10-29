@@ -13,6 +13,7 @@ from .modules.project_templates import project_templates_bp
 from .modules.power_manager import power_manager_bp
 from .modules.python_env import python_env_bp
 from .modules.cleanup import cleanup_bp
+from .modules.git_operations import git_operations_bp
 
 
 # ANSI Color codes for terminal styling
@@ -60,6 +61,7 @@ class TermTools(TermToolsApp):
         """Register all available blueprints"""
         # Register blueprints in order
         blueprints = [
+            git_operations_bp,
             python_env_bp,
             project_templates_bp,
             cleanup_bp,
