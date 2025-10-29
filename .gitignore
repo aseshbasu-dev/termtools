@@ -1,0 +1,5 @@
+__pycache__
+.venv
+context_menu_delete_dev_help
+start_project.bat
+download_and_run_termtools.py
