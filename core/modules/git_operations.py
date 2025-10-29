@@ -36,6 +36,10 @@ class GitOperations:
             )
             if result.returncode != 0:
                 print("❌ Not a git repository. Please initialize git first.")
+                print("   Use: git init")
+                print("   Then, add a remote repository with:")
+                print("   git remote add origin <remote_repository_url>")
+                print("   Then run this command again")
                 return
         except FileNotFoundError:
             print("❌ Git is not installed or not in PATH.")
