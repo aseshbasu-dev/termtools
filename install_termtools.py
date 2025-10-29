@@ -5,7 +5,10 @@ can be used as:
 or
 (Invoke-WebRequest -UseBasicParsing "https://raw.githubusercontent.com/basu-10/termtools/main/install_termtools.py").Content | python -
 
-(Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/basu-10/termtools/main/install_termtools.py').Content | python -
+# TermTools Installer for Windows
+# Open PowerShell as Administrator, then run:
+(Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/aseshbasu-dev/termtools/main/install_termtools.py').Content | python -
+
 
 https://github.com/aseshbasu-dev/termtools.git
 
@@ -54,7 +57,7 @@ if ctypes.windll.shell32.IsUserAnAdmin() == 0:
     ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
     sys.exit()
 
-REPO = "basu-10/termtools"     # e.g. "user/repo"
+REPO =  "aseshbasu-dev/termtools" # "basu-10/termtools"     # e.g. "user/repo"
 BRANCH = "main"
 TARGET_BASE = "BasusTools"
 TARGET_APP = "TermTools"
