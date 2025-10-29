@@ -1,5 +1,6 @@
 '''
 can be used as:
+Open in PowerShell as Administrator and run:
 (Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/aseshbasu-dev/termtools/main/install_termtools.py').Content | python -
 
 TermTools - Python Project Manager

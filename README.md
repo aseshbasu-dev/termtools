@@ -35,12 +35,14 @@ TermTools/
 
 ## 🚀 Quick Start
 
-1. **Run the application**:
-   ```bash
-   python TermTools.py
-   ```
+1. **Install the application to your system in a single line of code**:
+    '''
+    Open in PowerShell as Administrator and run:
+    (Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/aseshbasu-dev/termtools/main/install_termtools.py').Content | python -
+    '''
 
-2. **Navigate the menu** using the numbered options (0-10)
+
+2.  **Navigate the menu** using the numbered options (0-10)
 
 3. **Get help** anytime by selecting option `0`
 
