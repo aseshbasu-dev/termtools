@@ -1,15 +1,9 @@
 '''
 can be used as:
-(Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/basu-10/installers/main/installer_termtools.py').Content | python -
-
-or
-(Invoke-WebRequest -UseBasicParsing "https://raw.githubusercontent.com/basu-10/termtools/main/install_termtools.py").Content | python -
-
-# TermTools Installer for Windows
-# Open PowerShell as Administrator, then run:
 (Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/aseshbasu-dev/termtools/main/install_termtools.py').Content | python -
 
-
+TermTools - Python Project Manager
+at:
 https://github.com/aseshbasu-dev/termtools.git
 
 The install_termtools.py script is a complete installer that downloads, installs, and configures TermTools for Windows with right-click context menu integration.
