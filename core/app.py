@@ -60,7 +60,7 @@ class TermTools(TermToolsApp):
     def __init__(self):
         super().__init__("TermTools")
         self.current_dir = os.getcwd()
-        self.version = "1.0.0"
+        self.version = "2.0.0"
         self.author = "Asesh Basu"
         
         # Register all modules/blueprints
