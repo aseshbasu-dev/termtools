@@ -209,7 +209,7 @@ class TermToolsFrame(wx.Frame):
     def __init__(self):
         super().__init__(
             None, 
-            title="TermTools - Python Project Manager v2.8 GUI",
+            title="TermTools - Python Project Manager v2.9 GUI",
             size=(1000, 700)
         )
         
@@ -1117,7 +1117,7 @@ class TermToolsFrame(wx.Frame):
             
             wx.CallAfter(self._append_output, "✅ Update process initiated successfully!\n")
             wx.CallAfter(self._append_output, "💡 The installer will run with administrator privileges.\n")
-            wx.CallAfter(self._append_output, "🔄 TermTools will restart automatically if the update completes.\n")
+            wx.CallAfter(self._append_output, "🔄 Please restart TermTools to complete the update process.\n")
             
             # Show any output from the command
             if result.stdout:
