@@ -25,19 +25,22 @@ function Is-Admin {
 
 # --- 0. Self-elevate if not admin ---
 if (-not (Is-Admin)) {
-    Write-Info "Requesting admin rights..."
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = "powershell"
-    $psi.Arguments = "-ExecutionPolicy Bypass -File `"$PSCommandPath`""
-    $psi.Verb = "runas"
+    Write-Info "Current session is not elevated. Requesting admin rights..."
+    Write-Info "A UAC prompt will appear - please click 'Yes' to continue."
+    
+    $scriptPath = $PSCommandPath
+    $arguments = "-ExecutionPolicy Bypass -Command `"& '$scriptPath'; Read-Host 'Press Enter to exit'`""
+    
     try {
-        [System.Diagnostics.Process]::Start($psi) | Out-Null
+        Start-Process -FilePath "powershell" -ArgumentList $arguments -Verb RunAs -Wait
+        Write-Info "Elevated script completed. Check the elevated window for results."
         exit
     } catch {
-        Write-Info "User denied elevation. Installing for current user only."
+        Write-Info "User denied elevation or elevation failed. Installing for current user only."
         $NoAdmin = $true
     }
 } else {
+    Write-Info "Already running as Administrator."
     $NoAdmin = $false
 }
 
@@ -52,49 +55,73 @@ $pythonExists = Get-Command python -ErrorAction SilentlyContinue
 if ($pythonExists) {
     $version = python --version 2>&1
     Write-Info "Python already installed: $version"
-    Write-Info "Script finished — safe to rerun anytime."
-    exit 0
-}
-
-# --- 3. Download installer ---
-Write-Info "Downloading Python $pythonVersion..."
-Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath -UseBasicParsing
-
-# --- 4. Choose install mode ---
-if (-not $NoAdmin) {
-    Write-Info "Installing system-wide..."
-    $args = "/quiet InstallAllUsers=1 PrependPath=1 Include_test=0"
+    Write-Host "`nOK: Python is available: $version" -ForegroundColor Green
 } else {
-    Write-Info "Installing for current user..."
-    $args = "/quiet PrependPath=1 Include_test=0"
+    Write-Info "Python not found. Starting installation..."
+    
+    # --- 3. Download installer ---
+    Write-Info "Downloading Python $pythonVersion..."
+    Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath -UseBasicParsing
+
+    # --- 4. Choose install mode ---
+    if (-not $NoAdmin) {
+        Write-Info "Installing system-wide..."
+        $args = "/quiet InstallAllUsers=1 PrependPath=1 Include_test=0"
+    } else {
+        Write-Info "Installing for current user..."
+        $args = "/quiet PrependPath=1 Include_test=0"
+    }
+
+    # --- 5. Install silently ---
+    Start-Process -FilePath $installerPath -ArgumentList $args -Wait
+
+    # --- 6. Cleanup ---
+    Remove-Item $installerPath -Force
+
+    # --- 7. Verify installation ---
+    Write-Info "Verifying installation..."
+    $pythonExists = Get-Command python -ErrorAction SilentlyContinue
+    if ($pythonExists) {
+        $version = python --version 2>&1
+        Write-Host "`nOK: Python successfully installed: $version" -ForegroundColor Green
+    } else {
+        Write-Host "`nX: Python installation failed. Cannot proceed with TermTools installation." -ForegroundColor Red
+        Write-Host "`n=== Installation Failed ===" -ForegroundColor Red
+        Write-Host "Press any key to exit..." -ForegroundColor Yellow
+        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        exit 1
+    }
 }
 
-# --- 5. Install silently ---
-Start-Process -FilePath $installerPath -ArgumentList $args -Wait
+# --- 8. At this point, Python is confirmed available (either was already there or just installed) ---
+Write-Info "Python is confirmed available. Proceeding with TermTools installation..."
+$termtoolsInstaller = "https://raw.githubusercontent.com/aseshbasu-dev/termtools/refs/heads/main/install_termtools.py"
 
-# --- 6. Cleanup ---
-Remove-Item $installerPath -Force
-
-# --- 7. Verify installation ---
-Write-Info "Verifying installation..."
-$pythonExists = Get-Command python -ErrorAction SilentlyContinue
-if ($pythonExists) {
-    $version = python --version 2>&1
-    Write-Host "`nOK: Python successfully installed: $version" -ForegroundColor Green
+if (-not (Is-Admin)) {
+    Write-Info "TermTools installation requires admin rights. Elevating..."
+    Write-Info "A UAC prompt will appear for TermTools installation - please click 'Yes'."
     
-    # --- 8. Continue with TermTools installation ---
-    Write-Info "Now installing TermTools..."
-    $termtoolsInstaller = "https://raw.githubusercontent.com/aseshbasu-dev/termtools/main/install_termtools.py"
+    $installCommand = "try { `$content = Invoke-WebRequest -Uri '$termtoolsInstaller' -UseBasicParsing | Select-Object -ExpandProperty Content; `$content | python -; Write-Host '`n!!: TermTools installation complete!' -ForegroundColor Green } catch { Write-Host '`nX: TermTools installation failed: `$(`$_.Exception.Message)' -ForegroundColor Red }; Read-Host 'Press Enter to exit'"
+    
+    try {
+        Start-Process -FilePath "powershell" -ArgumentList "-ExecutionPolicy Bypass -Command `"$installCommand`"" -Verb RunAs -Wait
+        Write-Host "`n!!: TermTools installation completed in elevated session." -ForegroundColor Green
+    } catch {
+        Write-Host "`nX: Failed to elevate for TermTools installation: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "You can manually run as admin: (Invoke-WebRequest -UseBasicParsing '$termtoolsInstaller').Content | python -" -ForegroundColor Yellow
+    }
+} else {
+    Write-Info "Already elevated. Installing TermTools directly..."
     try {
         $content = Invoke-WebRequest -Uri $termtoolsInstaller -UseBasicParsing | Select-Object -ExpandProperty Content
         $content | python -
-        Write-Host "`n!!: Installation complete! TermTools is now available in your right-click context menu." -ForegroundColor Green
+        Write-Host "`n!!: TermTools installation complete! TermTools is now available in your right-click context menu." -ForegroundColor Green
     } catch {
         Write-Host "`nX: Failed to install TermTools: $($_.Exception.Message)" -ForegroundColor Red
         Write-Host "You can manually run: (Invoke-WebRequest -UseBasicParsing '$termtoolsInstaller').Content | python -" -ForegroundColor Yellow
     }
-} else {
-    Write-Host "`nX: Python installation failed. Try running PowerShell as Administrator." -ForegroundColor Red
 }
 
-Start-Sleep -Seconds 3
+Write-Host "`n=== Installation Complete ===" -ForegroundColor Green
+Write-Host "Press any key to exit..." -ForegroundColor Yellow
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
