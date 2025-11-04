@@ -80,7 +80,7 @@ Write-Info "Verifying installation..."
 $pythonExists = Get-Command python -ErrorAction SilentlyContinue
 if ($pythonExists) {
     $version = python --version 2>&1
-    Write-Host "`n✅ Python successfully installed: $version" -ForegroundColor Green
+    Write-Host "`nOK: Python successfully installed: $version" -ForegroundColor Green
     
     # --- 8. Continue with TermTools installation ---
     Write-Info "Now installing TermTools..."
@@ -88,13 +88,13 @@ if ($pythonExists) {
     try {
         $content = Invoke-WebRequest -Uri $termtoolsInstaller -UseBasicParsing | Select-Object -ExpandProperty Content
         $content | python -
-        Write-Host "`n🎉 Installation complete! TermTools is now available in your right-click context menu." -ForegroundColor Green
+        Write-Host "`n!!: Installation complete! TermTools is now available in your right-click context menu." -ForegroundColor Green
     } catch {
-        Write-Host "`n❌ Failed to install TermTools: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "`nX: Failed to install TermTools: $($_.Exception.Message)" -ForegroundColor Red
         Write-Host "You can manually run: (Invoke-WebRequest -UseBasicParsing '$termtoolsInstaller').Content | python -" -ForegroundColor Yellow
     }
 } else {
-    Write-Host "`n❌ Python installation failed. Try running PowerShell as Administrator." -ForegroundColor Red
+    Write-Host "`nX: Python installation failed. Try running PowerShell as Administrator." -ForegroundColor Red
 }
 
 Start-Sleep -Seconds 3
