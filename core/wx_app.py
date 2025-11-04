@@ -955,13 +955,51 @@ class TermToolsFrame(wx.Frame):
             # Silently handle errors to avoid disrupting the UI
             pass
     
+    def _is_dev_mode(self):
+        """
+        Check if running in development mode by reading installation_info.json
+        
+        Returns:
+            bool: True if dev_mode flag is set to true, False otherwise
+        """
+        try:
+            import json
+            from pathlib import Path
+            
+            # Always check local installation_info.json (in dev directory)
+            current_script_dir = Path(__file__).resolve().parent.parent  # Go up from core/ to TermTools root
+            info_file = current_script_dir / "core" / "data" / "installation_info.json"
+            
+            if info_file.exists():
+                with open(info_file, 'r') as f:
+                    data = json.load(f)
+                    return data.get("dev_mode", False)
+            
+            # If file doesn't exist, default to False (production mode)
+            return False
+            
+        except Exception as e:
+            # On any error, default to False (production mode)
+            print(f"⚠️ Warning: Could not read dev_mode from installation_info.json: {e}")
+            return False
+    
     def _setup_logging(self):
         """Setup logging to file"""
         from datetime import datetime
         from pathlib import Path
         
+        # Determine if running in dev mode from installation_info.json
+        current_script_dir = Path(__file__).resolve().parent.parent  # Go up from core/ to TermTools root
+        is_dev_mode = self._is_dev_mode()
+        
+        if is_dev_mode:
+            # Development mode: logs go to local directory
+            log_dir = current_script_dir / "core" / "data" / "logs"
+        else:
+            # Production mode: logs go to Program Files installation directory
+            log_dir = Path(r"C:\Program Files\BasusTools\TermTools\core\data\logs")
+        
         # Create logs directory if it doesn't exist
-        log_dir = Path("core/data/logs")
         log_dir.mkdir(parents=True, exist_ok=True)
         
         # Create log file with date
@@ -974,6 +1012,8 @@ class TermToolsFrame(wx.Frame):
                 f.write("\n")
                 f.write("="*80 + "\n")
                 f.write(f"TermTools Session - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"Mode: {'Development' if is_dev_mode else 'Production'}\n")
+                f.write(f"Working Directory: {os.getcwd()}\n")
                 f.write("="*80 + "\n")
                 f.write("\n")
         except Exception as e:

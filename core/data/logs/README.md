@@ -2,11 +2,25 @@
 
 This directory contains log files for TermTools sessions.
 
+## Log File Location
+
+**Production Mode** (installed in `C:\Program Files\BasusTools\TermTools\`):
+
+- Logs are **always** created in: `C:\Program Files\BasusTools\TermTools\core\data\logs\`
+- Regardless of which directory you run TermTools from (e.g., right-click in D:\songs)
+
+**Development Mode** (running from source code directory):
+
+- Logs are created in the local `core/data/logs/` directory
+- This ensures dev logs don't mix with production logs
+
+The mode is automatically detected based on the script location.
+
 ## Log File Format
 
 - **Filename**: `termtools_YYYYMMDD.log`
 - **Contents**: All output displayed in the GUI console (stdout and stderr)
-- **Sessions**: Each run appends to the daily log file with a session header
+- **Sessions**: Each run appends to the daily log file with a session header showing mode and working directory
 
 ## Log Rotation
 
