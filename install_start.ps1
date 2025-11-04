@@ -4,7 +4,7 @@
 
 # main installer
 # Bootstrap and run the this file(with "Run as Admininistrator" selected) as:
-# $u='https://raw.githubusercontent.com/aseshbasu-dev/termtools/refs/heads/main/install_python.ps1'; $f=Join-Path $env:TEMP 'bootstrap_and_run.ps1'; Invoke-WebRequest -Uri $u -OutFile $f -UseBasicParsing; Start-Process -FilePath 'powershell' -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$f`""
+# $u='https://raw.githubusercontent.com/aseshbasu-dev/termtools/refs/heads/main/install_start.ps1'; $f=Join-Path $env:TEMP 'bootstrap_and_run.ps1'; Invoke-WebRequest -Uri $u -OutFile $f -UseBasicParsing; Start-Process -FilePath 'powershell' -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$f`""
 # 
 # downloads python if not exists, installs it system-wide if run as admin, else per-user
 # starts the installation silently, adds to PATH
