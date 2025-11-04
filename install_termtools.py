@@ -15,6 +15,17 @@ The install_termtools.py script is a complete installer that downloads, installs
 Installs the configured project from GitHub to Program Files and sets up context menu.
 Run once as Administrator.
 
+Installation Flow Now:
+✅ Check admin privileges → elevate if needed
+🧹 NEW: Clean up existing installation completely
+📥 Download from GitHub
+📦 Extract files
+📂 Create fresh directory structure
+📋 Copy files
+🐍 Create virtual environment
+📦 Install requirements
+🖱️ Set up context menu
+
 '''
 
 
@@ -195,6 +206,45 @@ print(f"🐍 Using Python: {python_executable}")
 REPO_FULL_NAME = f"{REPO_OWNER}/{REPO_NAME}"
 
 program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
+
+# ==========================================
+# CLEANUP EXISTING INSTALLATION
+# ==========================================
+print("\n🧹 Checking for existing installation...")
+
+# Remove existing Program Files installation
+target_base = os.path.join(program_files, TARGET_BASE_FOLDER)
+target_app = os.path.join(target_base, TARGET_APP_FOLDER)
+
+if os.path.exists(target_app):
+    print(f"   Found existing installation at: {target_app}")
+    print(f"   Removing old installation...")
+    try:
+        shutil.rmtree(target_app, ignore_errors=False)
+        print(f"   ✅ Old installation removed successfully")
+    except Exception as e:
+        print(f"   ⚠️  Warning: Could not fully remove old installation: {e}")
+        print(f"   Will attempt to overwrite...")
+
+# Remove existing virtual environment in AppData (if using AppData location)
+if VENV_IN_APPDATA:
+    appdata_venv_dir = os.path.expanduser(f"~\\AppData\\Local\\{TARGET_BASE_FOLDER}\\{TARGET_APP_FOLDER}")
+    if os.path.exists(appdata_venv_dir):
+        print(f"   Found existing virtual environment at: {appdata_venv_dir}")
+        print(f"   Removing old virtual environment...")
+        try:
+            shutil.rmtree(appdata_venv_dir, ignore_errors=False)
+            print(f"   ✅ Old virtual environment removed successfully")
+        except Exception as e:
+            print(f"   ⚠️  Warning: Could not fully remove old venv: {e}")
+            print(f"   Will attempt to overwrite...")
+
+print("✅ Cleanup complete, starting fresh installation...\n")
+
+# ==========================================
+# END CLEANUP
+# ==========================================
+
 tempdir = tempfile.mkdtemp(prefix="gh_install_")
 
 try:
@@ -212,11 +262,7 @@ try:
     root = next(os.scandir(extract_dir)).path
 
     # Create the target directory structure using configuration
-    target_base = os.path.join(program_files, TARGET_BASE_FOLDER)
-    target_app = os.path.join(target_base, TARGET_APP_FOLDER)
-    
-    if os.path.exists(target_app):
-        shutil.rmtree(target_app, ignore_errors=True)
+    # (Cleanup already done at script start)
     os.makedirs(target_app, exist_ok=True)
     
     # Copy all files to the TermTools subdirectory
