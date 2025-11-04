@@ -104,7 +104,7 @@ CLEANUP_ON_ERROR = True                     # Clean up temp files on error
 def setup_context_menu_with_venv(target_app, venv_path):
     """Set up Windows context menu to use virtual environment Python"""
     script_path = os.path.join(target_app, MAIN_SCRIPT_NAME)
-    venv_python = os.path.join(venv_path, "Scripts", "python.exe")
+    venv_python = os.path.join(venv_path, "Scripts", "pythonw.exe")
     
     menu_key = REGISTRY_KEY_PATH
     command_key = menu_key + r"\command"
