@@ -208,7 +208,7 @@ class TermToolsFrame(wx.Frame):
     def __init__(self):
         super().__init__(
             None, 
-            title="TermTools - Python Project Manager v2.2 GUI",
+            title="TermTools - Python Project Manager v2.3 GUI",
             size=(1000, 700)
         )
         
