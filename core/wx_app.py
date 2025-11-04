@@ -11,6 +11,7 @@ import wx.lib.agw.buttonpanel as bp
 import sys
 import os
 import io
+import subprocess
 import threading
 from contextlib import redirect_stdout, redirect_stderr
 from typing import Dict, List
@@ -208,7 +209,7 @@ class TermToolsFrame(wx.Frame):
     def __init__(self):
         super().__init__(
             None, 
-            title="TermTools - Python Project Manager v2.7 GUI",
+            title="TermTools - Python Project Manager v2.8 GUI",
             size=(1000, 700)
         )
         
@@ -397,6 +398,22 @@ class TermToolsFrame(wx.Frame):
         dir_label.SetBackgroundColour(DarkTheme.PANEL_BG)
         status_sizer.Add(dir_label, 0, wx.ALIGN_CENTER | wx.TOP, 5)
         
+        # Git repository status (dynamic)
+        self.git_repo_label = wx.StaticText(status_panel, label="")
+        git_repo_font = wx.Font(9, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+        self.git_repo_label.SetFont(git_repo_font)
+        self.git_repo_label.SetForegroundColour(DarkTheme.CATEGORY_GIT)
+        self.git_repo_label.SetBackgroundColour(DarkTheme.PANEL_BG)
+        status_sizer.Add(self.git_repo_label, 0, wx.ALIGN_CENTER | wx.TOP, 3)
+        
+        # Git last commit status (dynamic)
+        self.git_commit_label = wx.StaticText(status_panel, label="")
+        git_commit_font = wx.Font(9, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+        self.git_commit_label.SetFont(git_commit_font)
+        self.git_commit_label.SetForegroundColour(DarkTheme.TEXT_SECONDARY)
+        self.git_commit_label.SetBackgroundColour(DarkTheme.PANEL_BG)
+        status_sizer.Add(self.git_commit_label, 0, wx.ALIGN_CENTER | wx.TOP, 2)
+        
         # Shutdown timer status (dynamic)
         self.shutdown_status_label = wx.StaticText(status_panel, label="⚡ Shutdown Timer: Not Scheduled")
         shutdown_font = wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
@@ -413,8 +430,9 @@ class TermToolsFrame(wx.Frame):
         separator2.SetBackgroundColour(DarkTheme.SEPARATOR)
         sizer.Add(separator2, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 20)
         
-        # Update shutdown status on initial load
+        # Update shutdown status and git status on initial load
         self._update_shutdown_status()
+        self._update_git_status()
         
         panel.SetSizer(sizer)
         return panel
@@ -802,6 +820,72 @@ class TermToolsFrame(wx.Frame):
         thread = threading.Thread(target=run, daemon=True)
         thread.start()
     
+    def _update_git_status(self):
+        """Update the git repository status display"""
+        try:
+            # Check if we're in a git repository
+            result = subprocess.run(
+                ['git', 'rev-parse', '--is-inside-work-tree'],
+                capture_output=True,
+                text=True,
+                cwd=self.current_dir
+            )
+            
+            if result.returncode == 0:
+                # Get repository name from remote URL
+                repo_name = "Unknown"
+                try:
+                    remote_result = subprocess.run(
+                        ['git', 'remote', 'get-url', 'origin'],
+                        capture_output=True,
+                        text=True,
+                        cwd=self.current_dir,
+                        check=False
+                    )
+                    if remote_result.returncode == 0:
+                        remote_url = remote_result.stdout.strip()
+                        # Extract repo name from URL (e.g., https://github.com/user/repo.git -> repo)
+                        if remote_url:
+                            # Remove .git extension if present
+                            if remote_url.endswith('.git'):
+                                remote_url = remote_url[:-4]
+                            # Extract last part of path
+                            repo_name = remote_url.split('/')[-1]
+                except Exception:
+                    # If remote doesn't exist, try to get from directory name
+                    repo_name = os.path.basename(self.current_dir)
+                
+                self.git_repo_label.SetLabel(f"🔗 Git Repository: {repo_name}")
+                self.git_repo_label.Show()
+                
+                # Get last commit date and time
+                try:
+                    commit_result = subprocess.run(
+                        ['git', 'log', '-1', '--format=%cd', '--date=format:%B %d, %Y at %I:%M %p'],
+                        capture_output=True,
+                        text=True,
+                        cwd=self.current_dir,
+                        check=False
+                    )
+                    if commit_result.returncode == 0:
+                        last_commit = commit_result.stdout.strip()
+                        self.git_commit_label.SetLabel(f"📅 Last Commit: {last_commit}")
+                        self.git_commit_label.Show()
+                    else:
+                        self.git_commit_label.SetLabel("📅 Last Commit: No commits yet")
+                        self.git_commit_label.Show()
+                except Exception:
+                    self.git_commit_label.SetLabel("📅 Last Commit: Unable to retrieve")
+                    self.git_commit_label.Show()
+            else:
+                # Not a git repository
+                self.git_repo_label.Hide()
+                self.git_commit_label.Hide()
+        except Exception as e:
+            # Hide git status if git is not available or any error occurs
+            self.git_repo_label.Hide()
+            self.git_commit_label.Hide()
+    
     def _update_shutdown_status(self):
         """Update the shutdown status display"""
         try:
@@ -870,9 +954,12 @@ class TermToolsFrame(wx.Frame):
         return str(log_file_path)
     
     def on_status_timer(self, event):
-        """Timer event handler for updating shutdown status and time"""
+        """Timer event handler for updating shutdown status, git status, and time"""
         # Update shutdown status
         self._update_shutdown_status()
+        
+        # Update git status (check every timer tick in case user changes directories or makes commits)
+        self._update_git_status()
         
         # Update current date/time
         from datetime import datetime

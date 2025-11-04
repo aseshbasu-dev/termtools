@@ -302,6 +302,111 @@ class GitOperations:
         print("🎉 All operations completed successfully!")
 
     @staticmethod
+    def _get_repo_url_input(app=None):
+        """
+        Get repository URL from user via GUI dialog.
+        
+        Args:
+            app: TermTools app instance (used to detect GUI mode)
+            
+        Returns:
+            str: Repository URL or None if cancelled
+        """
+        return GitOperations._get_repo_url_input_gui_threadsafe()
+    
+    @staticmethod
+    def _get_repo_url_input_gui():
+        """Get repository URL via GUI dialog"""
+        try:
+            import wx
+            
+            instructions = (
+                "Enter your Git repository URL.\n\n"
+                "Repository URL formats:\n"
+                "• HTTPS: https://github.com/username/repository.git\n"
+                "• SSH:   git@github.com:username/repository.git\n\n"
+                "Example: https://github.com/aseshbasu-dev/termtools.git"
+            )
+            
+            # Create dialog for repository URL input
+            dlg = wx.TextEntryDialog(
+                None,
+                instructions,
+                "Git Repository URL",
+                ""  # Empty default value
+            )
+            dlg.SetSize(wx.Size(550, 250))  # Make dialog larger for instructions
+            
+            if dlg.ShowModal() == wx.ID_OK:
+                repo_url = dlg.GetValue().strip()
+                dlg.Destroy()
+                return repo_url if repo_url else None
+            else:
+                dlg.Destroy()
+                return None  # User cancelled
+        except Exception as e:
+            print(f"❌ Error showing GUI dialog: {e}")
+            return None
+    
+    @staticmethod
+    def _get_repo_url_input_gui_threadsafe():
+        """Thread-safe version using wx.CallAfter for GUI operations"""
+        import wx
+        import threading
+        
+        result_container = {"value": None, "done": False}
+        
+        def show_dialog():
+            try:
+                instructions = (
+                    "Enter your Git repository URL.\n\n"
+                    "Repository URL formats:\n"
+                    "• HTTPS: https://github.com/username/repository.git\n"
+                    "• SSH:   git@github.com:username/repository.git\n\n"
+                    "Example: https://github.com/aseshbasu-dev/termtools.git"
+                )
+                
+                dlg = wx.TextEntryDialog(
+                    None,
+                    instructions,
+                    "Git Repository URL",
+                    ""  # Empty default value
+                )
+                dlg.SetSize(wx.Size(550, 250))
+                
+                if dlg.ShowModal() == wx.ID_OK:
+                    repo_url = dlg.GetValue().strip()
+                    result_container["value"] = repo_url if repo_url else None
+                else:
+                    result_container["value"] = None  # User cancelled
+                dlg.Destroy()
+            except Exception as e:
+                print(f"❌ Error showing GUI dialog: {e}")
+                result_container["value"] = None
+            finally:
+                result_container["done"] = True
+        
+        # Check if we're on the main thread using threading
+        try:
+            main_thread = threading.main_thread()
+            current_thread = threading.current_thread()
+            
+            if current_thread == main_thread:
+                return GitOperations._get_repo_url_input_gui()
+            else:
+                # Use CallAfter to execute on main thread
+                wx.CallAfter(show_dialog)
+                
+                # Wait for dialog to complete
+                while not result_container["done"]:
+                    threading.Event().wait(0.1)
+                
+                return result_container["value"]
+        except:
+            # Fallback if wx not available or other issues
+            return GitOperations._get_repo_url_input_gui()
+
+    @staticmethod
     def _get_untrack_input(app=None):
         """
         Get files/folders to untrack from user via GUI dialog.
@@ -515,14 +620,201 @@ class GitOperations:
         print(f"   • Files remain on disk but are no longer tracked by Git")
         print(f"   • Changes committed and pushed to remote repository")
 
+    @staticmethod
+    def initialize_repo(app=None):
+        """
+        Initialize a Git repository and add a remote origin.
+        
+        Args:
+            app: TermTools app instance
+        """
+        print("\n🔧 Initialize Git Repository")
+        print("="*60)
+        
+        # Check if git is available
+        try:
+            subprocess.run(
+                ['git', '--version'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+        except FileNotFoundError:
+            print("❌ Git is not installed or not in PATH.")
+            return
+        except subprocess.CalledProcessError:
+            print("❌ Error checking Git installation.")
+            return
+        
+        # Check if already a git repository
+        try:
+            result = subprocess.run(
+                ['git', 'rev-parse', '--git-dir'],
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            if result.returncode == 0:
+                print("⚠️  This folder is already a Git repository.")
+                print(f"   Git directory: {result.stdout.strip()}")
+                
+                # Check if remote already exists
+                result = subprocess.run(
+                    ['git', 'remote', 'get-url', 'origin'],
+                    capture_output=True,
+                    text=True,
+                    check=False
+                )
+                if result.returncode == 0:
+                    print(f"   Remote 'origin' already configured: {result.stdout.strip()}")
+                
+                if not GitOperations._get_confirmation(
+                    "Git repository already initialized. Do you want to continue and update the remote?",
+                    "Git Already Initialized",
+                    app
+                ):
+                    print("❌ Operation cancelled.")
+                    return
+        except Exception as e:
+            print(f"⚠️  Could not check repository status: {e}")
+        
+        # Get repository URL from user
+        print("\n📝 Step 1/3: Getting repository URL...")
+        print("\n📋 Repository URL Format Examples:")
+        print("   • HTTPS: https://github.com/username/repository.git")
+        print("   • SSH:   git@github.com:username/repository.git")
+        print("")
+        
+        repo_url = GitOperations._get_repo_url_input(app)
+        
+        if not repo_url:
+            print("❌ Operation cancelled - no repository URL specified")
+            return
+        
+        # Extract repository name from URL for display
+        repo_name = repo_url
+        if repo_url.endswith('.git'):
+            repo_name = repo_url.rsplit('/', 1)[-1][:-4]  # Remove .git extension
+        elif '/' in repo_url:
+            repo_name = repo_url.rsplit('/', 1)[-1]
+        
+        print(f"📂 Repository URL: {repo_url}")
+        print(f"📦 Repository name: {repo_name}")
+        
+        # Show confirmation with exact commands
+        print("\n🔍 Commands that will be executed:")
+        print("   git init")
+        print(f"   git remote add origin {repo_url}")
+        
+        confirmation_message = (
+            f"About to initialize Git repository:\n\n"
+            f"Repository URL: {repo_url}\n"
+            f"Repository name: {repo_name}\n\n"
+            f"Commands to execute:\n"
+            f"1. git init\n"
+            f"2. git remote add origin {repo_url}\n\n"
+            f"Continue?"
+        )
+        
+        if not GitOperations._get_confirmation(confirmation_message, "Confirm Git Initialization", app):
+            print("❌ Operation cancelled by user")
+            return
+        
+        # Step 2: git init
+        print("\n🎬 Step 2/3: Initializing Git repository...")
+        try:
+            result = subprocess.run(
+                ['git', 'init'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            print("✅ Git repository initialized successfully")
+            if result.stdout:
+                print(f"   {result.stdout.strip()}")
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Error initializing repository: {e}")
+            if e.stderr:
+                print(f"   {e.stderr.strip()}")
+            return
+        
+        # Step 3: git remote add origin
+        print("\n🌐 Step 3/3: Adding remote origin...")
+        try:
+            # First, check if origin already exists and remove it
+            result = subprocess.run(
+                ['git', 'remote', 'get-url', 'origin'],
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            if result.returncode == 0:
+                print("   ℹ️  Remote 'origin' already exists, removing...")
+                subprocess.run(
+                    ['git', 'remote', 'remove', 'origin'],
+                    capture_output=True,
+                    text=True,
+                    check=True
+                )
+                print("   ✅ Old remote removed")
+            
+            # Add the new remote
+            result = subprocess.run(
+                ['git', 'remote', 'add', 'origin', repo_url],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            print("✅ Remote 'origin' added successfully")
+            
+            # Verify the remote
+            result = subprocess.run(
+                ['git', 'remote', '-v'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            if result.stdout:
+                print("   Remote configuration:")
+                for line in result.stdout.strip().split('\n'):
+                    print(f"     {line}")
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Error adding remote origin: {e}")
+            if e.stderr:
+                print(f"   {e.stderr.strip()}")
+            return
+        
+        print("\n" + "="*60)
+        print("🎉 Git repository initialized successfully!")
+        print("📋 Summary:")
+        print(f"   • Repository initialized in current folder")
+        print(f"   • Remote 'origin' configured: {repo_url}")
+        print(f"   • Repository name: {repo_name}")
+        print("\n💡 Next steps:")
+        print("   • Add files: git add .")
+        print("   • Create first commit: git commit -m \"Initial commit\"")
+        print("   • Push to remote: git push -u origin main")
+
 
 # Register menu items using the blueprint route decorator
 @git_operations_bp.route(
     "1",
+    "Initialize Git Repo",
+    "Initialize repository and add remote origin",
+    "🔧 GIT OPERATIONS",
+    order=1
+)
+def git_initialize_repo(app=None):
+    """Menu handler for initializing git repository"""
+    GitOperations.initialize_repo(app)
+
+
+@git_operations_bp.route(
+    "1.1",
     "Quick Commit & Push",
     "Add, commit, and push changes",
     "🔧 GIT OPERATIONS",
-    order=1
+    order=2
 )
 def git_quick_commit_push(app=None):
     """Menu handler for quick commit and push"""
@@ -534,7 +826,7 @@ def git_quick_commit_push(app=None):
     "Untrack, Commit & Push",
     "Remove files/folders from Git tracking",
     "🔧 GIT OPERATIONS",
-    order=2
+    order=3
 )
 def git_untrack_commit_push(app=None):
     """Menu handler for untrack, commit and push"""
