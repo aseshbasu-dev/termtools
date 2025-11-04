@@ -83,6 +83,10 @@ Open PowerShell as Administrator and run:
 
 - **9**: Schedule system shutdown (1hr, 2hr, 3hr, custom)
 
+### ⚙️ Settings
+
+- **Settings Button**: Open settings dialog with update options
+
 ## For devs
 Visit .docs/dev_help.md
 

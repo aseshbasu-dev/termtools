@@ -208,7 +208,7 @@ class TermToolsFrame(wx.Frame):
     def __init__(self):
         super().__init__(
             None, 
-            title="TermTools - Python Project Manager",
+            title="TermTools - Python Project Manager v2.0 GUI",
             size=(1000, 700)
         )
         
@@ -480,14 +480,20 @@ class TermToolsFrame(wx.Frame):
         separator.SetBackgroundColour(DarkTheme.SEPARATOR)
         self.button_sizer.Add(separator, 0, wx.EXPAND | wx.ALL, 10)
         
+        # Settings button
+        settings_button = wx.Button(parent, label="⚙️ Settings", size=wx.Size(-1, 35))
+        self._style_button(settings_button, text_colour=DarkTheme.TEXT_ACCENT)
+        settings_button.Bind(wx.EVT_BUTTON, self.on_show_settings)
+        self.button_sizer.Add(settings_button, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
+        
         # Help button
-        help_button = wx.Button(parent, label="❓ Show Help", size=(-1, 35))
+        help_button = wx.Button(parent, label="❓ Show Help", size=wx.Size(-1, 35))
         self._style_button(help_button, text_colour=DarkTheme.CATEGORY_HELP)
         help_button.Bind(wx.EVT_BUTTON, self.on_show_help)
         self.button_sizer.Add(help_button, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
         
         # Exit button
-        exit_button = wx.Button(parent, label="❌ Exit", size=(-1, 35))
+        exit_button = wx.Button(parent, label="❌ Exit", size=wx.Size(-1, 35))
         self._style_button(exit_button, text_colour=DarkTheme.TEXT_ERROR)
         exit_button.Bind(wx.EVT_BUTTON, self.on_exit)
         self.button_sizer.Add(exit_button, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
@@ -878,6 +884,165 @@ class TermToolsFrame(wx.Frame):
         """Clear the output console"""
         self.output_text.Clear()
     
+    def on_show_settings(self, event):
+        """Show settings dialog"""
+        # Create custom settings dialog
+        dlg = wx.Dialog(
+            self,
+            title="⚙️ TermTools Settings",
+            size=wx.Size(400, 400),
+            style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER
+        )
+        
+        # Apply dark theme
+        dlg.SetBackgroundColour(DarkTheme.MAIN_BG)
+        
+        # Create main sizer
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # Title
+        title = wx.StaticText(dlg, label="Application Settings")
+        title_font = wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+        title.SetFont(title_font)
+        title.SetForegroundColour(DarkTheme.TEXT_PRIMARY)
+        title.SetBackgroundColour(DarkTheme.MAIN_BG)
+        sizer.Add(title, 0, wx.ALIGN_CENTER | wx.TOP | wx.BOTTOM, 15)
+        
+        # Update section
+        update_panel = wx.Panel(dlg)
+        update_panel.SetBackgroundColour(DarkTheme.PANEL_BG)
+        update_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        update_label = wx.StaticText(update_panel, label="🔄 Update TermTools")
+        update_label.SetForegroundColour(DarkTheme.TEXT_ACCENT)
+        update_label.SetBackgroundColour(DarkTheme.PANEL_BG)
+        update_sizer.Add(update_label, 0, wx.ALL, 10)
+        
+        update_desc = wx.StaticText(
+            update_panel, 
+            label="Download and install the latest version of TermTools.\nThis will require administrator privileges."
+        )
+        update_desc.SetForegroundColour(DarkTheme.TEXT_SECONDARY)
+        update_desc.SetBackgroundColour(DarkTheme.PANEL_BG)
+        update_sizer.Add(update_desc, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+        
+        # Update button
+        update_button = wx.Button(update_panel, label="🚀 Update Now", size=wx.Size(-1, 35))
+        self._style_button(update_button, text_colour=DarkTheme.TEXT_SUCCESS)
+        update_button.Bind(wx.EVT_BUTTON, lambda evt: self._on_update_termtools(dlg))
+        update_sizer.Add(update_button, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+        
+        update_panel.SetSizer(update_sizer)
+        sizer.Add(update_panel, 1, wx.EXPAND | wx.ALL, 10)
+        
+        # Close button
+        close_button = wx.Button(dlg, label="Close", size=wx.Size(-1, 35))
+        self._style_button(close_button)
+        close_button.Bind(wx.EVT_BUTTON, lambda evt: dlg.EndModal(wx.ID_CANCEL))
+        sizer.Add(close_button, 0, wx.ALIGN_CENTER | wx.ALL, 10)
+        
+        dlg.SetSizer(sizer)
+        
+        # Apply dark theme to all children
+        def apply_dark_theme_to_children(parent):
+            for child in parent.GetChildren():
+                if isinstance(child, wx.StaticText):
+                    child.SetBackgroundColour(DarkTheme.MAIN_BG)
+                    child.SetForegroundColour(DarkTheme.TEXT_PRIMARY)
+                elif isinstance(child, wx.Button):
+                    child.SetBackgroundColour(DarkTheme.BUTTON_BG)
+                    child.SetForegroundColour(DarkTheme.TEXT_PRIMARY)
+                elif isinstance(child, wx.Panel):
+                    child.SetBackgroundColour(DarkTheme.PANEL_BG)
+                apply_dark_theme_to_children(child)
+        
+        apply_dark_theme_to_children(dlg)
+        dlg.Refresh()
+        
+        dlg.ShowModal()
+        dlg.Destroy()
+    
+    def _on_update_termtools(self, parent_dialog):
+        """Handle the update TermTools button click"""
+        # Close the settings dialog first
+        parent_dialog.EndModal(wx.ID_CANCEL)
+        
+        # Show confirmation dialog
+        confirm_dlg = wx.MessageDialog(
+            self,
+            "This will download and install the latest version of TermTools.\n\n"
+            "• Administrator privileges will be requested\n"
+            "• The application may restart automatically\n"
+            "• Your current session will be preserved\n\n"
+            "Continue with the update?",
+            "Confirm Update",
+            wx.YES_NO | wx.ICON_QUESTION
+        )
+        
+        if confirm_dlg.ShowModal() == wx.ID_YES:
+            confirm_dlg.Destroy()
+            
+            # Run the update in a separate thread to avoid blocking the GUI
+            import threading
+            update_thread = threading.Thread(target=self._perform_update)
+            update_thread.daemon = True
+            update_thread.start()
+        else:
+            confirm_dlg.Destroy()
+    
+    def _perform_update(self):
+        """Perform the actual update operation"""
+        try:
+            # Import here to avoid circular imports
+            import subprocess
+            
+            # The PowerShell command for updating
+            command = (
+                "$u='https://raw.githubusercontent.com/aseshbasu-dev/termtools/refs/heads/main/install_start.ps1'; "
+                "$f=Join-Path $env:TEMP 'bootstrap_and_run.ps1'; "
+                "Invoke-WebRequest -Uri $u -OutFile $f -UseBasicParsing; "
+                "Start-Process -FilePath 'powershell' -Verb RunAs -ArgumentList \"-NoProfile -ExecutionPolicy Bypass -File `\"$f`\"\""
+            )
+            
+            # Show progress in output
+            wx.CallAfter(self._append_output, "🔄 Starting TermTools update...\n")
+            wx.CallAfter(self._append_output, "📥 Downloading latest installer...\n")
+            
+            # Run the PowerShell command
+            result = subprocess.run(
+                ["powershell", "-Command", command],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            wx.CallAfter(self._append_output, "✅ Update process initiated successfully!\n")
+            wx.CallAfter(self._append_output, "💡 The installer will run with administrator privileges.\n")
+            wx.CallAfter(self._append_output, "🔄 TermTools will restart automatically if the update completes.\n")
+            
+            # Show any output from the command
+            if result.stdout:
+                wx.CallAfter(self._append_output, f"Output: {result.stdout.strip()}\n")
+            if result.stderr:
+                wx.CallAfter(self._append_output, f"Warnings: {result.stderr.strip()}\n")
+                
+        except subprocess.CalledProcessError as e:
+            wx.CallAfter(self._append_output, f"❌ Update failed to initiate: {e}\n")
+            if e.stderr:
+                wx.CallAfter(self._append_output, f"   Error details: {e.stderr.strip()}\n")
+            wx.CallAfter(self._append_output, "💡 Make sure you have internet connection and administrator privileges.\n")
+        except FileNotFoundError:
+            wx.CallAfter(self._append_output, "❌ PowerShell not found. This feature requires Windows PowerShell.\n")
+        except Exception as e:
+            wx.CallAfter(self._append_output, f"❌ Unexpected error during update: {e}\n")
+    
+    def _append_output(self, text):
+        """Append text to the output console"""
+        current_text = self.output_text.GetValue()
+        self.output_text.SetValue(current_text + text)
+        # Auto-scroll to bottom
+        self.output_text.ShowPosition(self.output_text.GetLastPosition())
+
     def on_show_help(self, event):
         """Show help dialog"""
         with redirect_stdout(self.stdout_redirector), redirect_stderr(self.stderr_redirector):
