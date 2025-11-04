@@ -85,15 +85,14 @@ REGISTRY_KEY_PATH = r"Software\Classes\Directory\Background\shell\TermTools"
 # Installation Behavior
 AUTO_UPGRADE_PIP = True                     # Upgrade pip in virtual environment
 INSTALL_REQUIREMENTS = True                 # Install from requirements.txt if present
-CLEANUP_ON_ERROR = False                    # Clean up temp files on error (disabled for debugging)
-REQUIRE_VENV = True                         # MANDATORY: Installation fails if venv creation fails
+CLEANUP_ON_ERROR = True                     # Clean up temp files on error
+REQUIRE_VENV = True                         # MANDATORY: TermTools requires virtual environment
 
-# IMPORTANT NOTE: VENV_IN_APPDATA=True helps avoid permission issues when creating
+# CRITICAL: TermTools ONLY runs with virtual environment. 
+# No system Python fallback is allowed.
+# VENV_IN_APPDATA=True helps avoid permission issues when creating
 # virtual environments in Program Files. The venv will be created in:
 # %USERPROFILE%\AppData\Local\BasusTools\TermTools\.venv
-# 
-# CRITICAL: This installer REQUIRES a virtual environment. It will NOT fall back
-# to system Python installations. If venv creation fails, installation fails.
 
 # ==========================================
 # END CONFIGURATION VARIABLES
@@ -144,18 +143,16 @@ def setup_context_menu_with_venv(target_app, venv_path):
     """Set up Windows context menu to use virtual environment Python ONLY"""
     script_path = os.path.join(target_app, MAIN_SCRIPT_NAME)
     
-    # MUST use virtual environment Python - no fallback to system Python
+    # CRITICAL: Only use virtual environment Python (no system Python fallback)
     if venv_path is None:
         raise RuntimeError("Cannot setup context menu without virtual environment")
     
     python_exe = os.path.join(venv_path, "Scripts", "pythonw.exe")
-    if not os.path.exists(python_exe):
-        # Try python.exe if pythonw.exe doesn't exist
-        python_exe = os.path.join(venv_path, "Scripts", "python.exe")
-        if not os.path.exists(python_exe):
-            raise RuntimeError(f"Virtual environment Python not found at: {venv_path}")
-    
     print(f"   Using virtual environment Python: {python_exe}")
+    
+    # Verify the Python executable exists
+    if not os.path.exists(python_exe):
+        raise RuntimeError(f"Virtual environment Python not found at: {python_exe}")
     
     menu_key = REGISTRY_KEY_PATH
     command_key = menu_key + r"\command"
@@ -291,9 +288,14 @@ try:
     
     if not venv_created:
         print("❌ All virtual environment creation attempts failed")
-        print("💡 TermTools REQUIRES a virtual environment to run properly")
-        print("   Cannot proceed without a virtual environment")
-        raise RuntimeError("Virtual environment creation failed - installation cannot continue")
+        print("❌ CRITICAL ERROR: TermTools REQUIRES a virtual environment to run")
+        print("   Installation cannot continue without a working virtual environment.")
+        print("\n💡 Troubleshooting tips:")
+        print("   1. Ensure Python was installed with 'pip' support")
+        print("   2. Try running: python -m ensurepip --upgrade")
+        print("   3. Check that you have write permissions to the AppData directory")
+        print(f"   4. Attempted venv location: {venv_path}")
+        raise RuntimeError("Failed to create virtual environment - TermTools installation aborted")
     else:
         print(f"✅ Virtual environment ready at: {venv_path}")
 
@@ -302,16 +304,16 @@ try:
     if INSTALL_REQUIREMENTS and os.path.exists(requirements_path):
         print(f"🔧 Installing requirements from {REQUIREMENTS_FILE}...")
         
-        # Always use virtual environment (no fallback to system Python)
+        # CRITICAL: Only use virtual environment (system Python fallback removed)
         print("   Using virtual environment Python...")
         venv_python = os.path.join(venv_path, "Scripts", "python.exe")
         
-        # Verify venv python exists
+        # Verify venv python exists (should always exist if we got here)
         if not os.path.exists(venv_python):
-            print(f"❌ Virtual environment Python not found at: {venv_python}")
-            raise RuntimeError("Virtual environment is corrupted - Python executable missing")
+            print(f"❌ CRITICAL: Virtual environment Python not found at: {venv_python}")
+            raise RuntimeError("Virtual environment is corrupted or incomplete")
         
-        # Use python -m pip for reliability
+        # Always use python -m pip instead of direct pip executable for reliability
         pip_cmd_base = [venv_python, "-m", "pip"]
         
         # Upgrade pip first if enabled
@@ -327,7 +329,7 @@ try:
                     print(f"   {e.stderr.strip()}")
                 # Continue anyway - pip might still work for installation
         
-        # Install requirements to virtual environment only
+        # Install requirements to virtual environment ONLY
         try:
             print("   Installing requirements to virtual environment...")
             result = subprocess.run(pip_cmd_base + ["install", "-r", REQUIREMENTS_FILE], 
@@ -340,7 +342,7 @@ try:
             if e.stderr:
                 print(f"   {e.stderr.strip()}")
             
-            # Try to bootstrap pip if it's missing
+            # Try alternative installation method - bootstrap pip if missing
             if "No module named pip" in str(e) or "No module named pip" in (e.stderr or ""):
                 print("   Attempting to bootstrap pip in virtual environment...")
                 try:
@@ -349,17 +351,16 @@ try:
                                  capture_output=True, text=True, check=True)
                     print("   Pip bootstrapped successfully, retrying requirements installation...")
                     
-                    # Retry installation in virtual environment
+                    # Retry installation
                     result = subprocess.run(pip_cmd_base + ["install", "-r", REQUIREMENTS_FILE], 
                                           capture_output=True, text=True, check=True, cwd=target_app)
                     print("✅ Requirements installed successfully after pip bootstrap")
                 except subprocess.CalledProcessError as bootstrap_e:
-                    print(f"❌ Pip bootstrap failed: {bootstrap_e}")
-                    print("   Virtual environment pip is not working properly")
-                    raise RuntimeError("Cannot install requirements - virtual environment pip failed")
+                    print(f"❌ CRITICAL: Pip bootstrap failed: {bootstrap_e}")
+                    raise RuntimeError("Failed to install requirements - TermTools needs wxPython to run")
             else:
-                print("❌ Requirements installation failed in virtual environment")
-                raise RuntimeError("Cannot install requirements - installation failed")
+                print(f"❌ CRITICAL: Requirements installation failed")
+                raise RuntimeError("Failed to install requirements - TermTools needs wxPython to run")
     else:
         if not INSTALL_REQUIREMENTS:
             print("ℹ️  Requirements installation disabled in configuration")
@@ -384,7 +385,8 @@ try:
     print(f"📍 Installation location: {target_app}")
     print(f"🐍 Virtual environment: {venv_path}")
     print(f" Right-click context menu added - you can now run {TARGET_APP_FOLDER} from any folder")
-    print(f"💡 {TARGET_APP_FOLDER} will ONLY run using the virtual environment")
+    print(f"\n⚠️  IMPORTANT: TermTools runs ONLY from its virtual environment")
+    print(f"   Do not delete the virtual environment at: {venv_path}")
 
 finally:
     if CLEANUP_ON_ERROR:
