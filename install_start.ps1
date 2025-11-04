@@ -97,15 +97,22 @@ if ($pythonExists) {
 Write-Info "Python is confirmed available. Proceeding with TermTools installation..."
 $termtoolsInstaller = "https://raw.githubusercontent.com/aseshbasu-dev/termtools/refs/heads/main/install_termtools.py"
 
+$installSuccess = $false
+
 if (-not (Is-Admin)) {
     Write-Info "TermTools installation requires admin rights. Elevating..."
     Write-Info "A UAC prompt will appear for TermTools installation - please click 'Yes'."
     
-    $installCommand = "try { `$content = Invoke-WebRequest -Uri '$termtoolsInstaller' -UseBasicParsing | Select-Object -ExpandProperty Content; `$content | python -; Write-Host '`n!!: TermTools installation complete!' -ForegroundColor Green } catch { Write-Host '`nX: TermTools installation failed: `$(`$_.Exception.Message)' -ForegroundColor Red }; Read-Host 'Press Enter to exit'"
+    $installCommand = "try { `$content = Invoke-WebRequest -Uri '$termtoolsInstaller' -UseBasicParsing | Select-Object -ExpandProperty Content; `$content | python -; Write-Host '`n!!: TermTools installation complete!' -ForegroundColor Green; exit 0 } catch { Write-Host '`nX: TermTools installation failed: `$(`$_.Exception.Message)' -ForegroundColor Red; Read-Host 'Press Enter to exit'; exit 1 }"
     
     try {
-        Start-Process -FilePath "powershell" -ArgumentList "-ExecutionPolicy Bypass -Command `"$installCommand`"" -Verb RunAs -Wait
-        Write-Host "`n!!: TermTools installation completed in elevated session." -ForegroundColor Green
+        $process = Start-Process -FilePath "powershell" -ArgumentList "-ExecutionPolicy Bypass -Command `"$installCommand`"" -Verb RunAs -Wait -PassThru
+        if ($process.ExitCode -eq 0) {
+            Write-Host "`n!!: TermTools installation completed successfully!" -ForegroundColor Green
+            $installSuccess = $true
+        } else {
+            Write-Host "`nX: TermTools installation failed (exit code: $($process.ExitCode))" -ForegroundColor Red
+        }
     } catch {
         Write-Host "`nX: Failed to elevate for TermTools installation: $($_.Exception.Message)" -ForegroundColor Red
         Write-Host "You can manually run as admin: (Invoke-WebRequest -UseBasicParsing '$termtoolsInstaller').Content | python -" -ForegroundColor Yellow
@@ -115,13 +122,22 @@ if (-not (Is-Admin)) {
     try {
         $content = Invoke-WebRequest -Uri $termtoolsInstaller -UseBasicParsing | Select-Object -ExpandProperty Content
         $content | python -
-        Write-Host "`n!!: TermTools installation complete! TermTools is now available in your right-click context menu." -ForegroundColor Green
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "`n!!: TermTools installation complete! TermTools is now available in your right-click context menu." -ForegroundColor Green
+            $installSuccess = $true
+        } else {
+            Write-Host "`nX: TermTools installation failed (exit code: $LASTEXITCODE)" -ForegroundColor Red
+        }
     } catch {
         Write-Host "`nX: Failed to install TermTools: $($_.Exception.Message)" -ForegroundColor Red
         Write-Host "You can manually run: (Invoke-WebRequest -UseBasicParsing '$termtoolsInstaller').Content | python -" -ForegroundColor Yellow
     }
 }
 
-Write-Host "`n=== Installation Complete ===" -ForegroundColor Green
+if ($installSuccess) {
+    Write-Host "`n=== Installation Complete ===" -ForegroundColor Green
+} else {
+    Write-Host "`n=== Installation Failed ===" -ForegroundColor Red
+}
 Write-Host "Press any key to exit..." -ForegroundColor Yellow
 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
