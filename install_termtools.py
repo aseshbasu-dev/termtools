@@ -133,7 +133,8 @@ def save_installation_metadata(target_app, repo_owner, repo_name, commit_hash):
             "repository": f"{repo_owner}/{repo_name}",
             "remote_commit_hash": commit_hash,
             "installer_version": "2.0",
-            "installation_path": target_app
+            "installation_path": target_app,
+            "dev_mode": False
         }
         
         with open(metadata_file, 'w') as f:
