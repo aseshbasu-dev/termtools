@@ -244,6 +244,16 @@ try:
         venv_path = os.path.join(target_app, VENV_FOLDER_NAME)
         print(f"   Using installation directory for venv: {venv_path}")
     
+    # Remove old venv if it exists (prevents permission issues during update)
+    if os.path.exists(venv_path):
+        print(f"   Removing existing venv at {venv_path}...")
+        try:
+            shutil.rmtree(venv_path, ignore_errors=True)
+            print("   ✅ Old venv removed successfully")
+        except Exception as e:
+            print(f"   ⚠️ Warning: Could not fully remove old venv: {e}")
+            print("   Attempting to continue anyway...")
+    
     # Try multiple approaches for venv creation
     venv_created = False
     
