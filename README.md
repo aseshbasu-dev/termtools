@@ -7,10 +7,12 @@ A comprehensive Python project manager with **wxPython GUI** and modular bluepri
 ## 🌟 Features
 
 - **🎨 Modern GUI**: wxPython interface with button-based navigation and split buttons for multi-option features
-- **🐍 Python Environment Management**: Virtual environment creation, requirements management
-- **🔧 Git Operations**: Quick commit & push with interactive prompts
+- **🐍 Python Environment Management**: Virtual environment creation, requirements management, project startup
+- **🔧 Git Operations**: Quick commit & push, untrack files, and push operations
 - **🧹 Clean Up Operations**: Remove cache files, build artifacts, and thumbnails
 - **🏗️ Project Templates**: Generate complete Flask project scaffolds with blueprints
+- **📁 Folder Operations**: Copy folders with exclusions and custom naming
+- **🎯 Productivity Tools**: Pomodoro timer for focused work sessions
 - **💻 System Power Management**: Schedule system shutdowns with various time options
 - **📊 Real-time Output Console**: See command results as they execute
 - **🔧 Modular Architecture**: Blueprint system for easy extensibility
@@ -25,27 +27,49 @@ TermTools uses a modular blueprint architecture inspired by Flask, allowing for 
 
 Open PowerShell as Administrator and run:
 
-Install python first with: 
-
 ```powershell
 (Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/aseshbasu-dev/termtools/main/install_termtools.py').Content | python -
 ```
 
-## 📋 Available Modules
+**What this installer does:**
+- ✅ Checks for administrator privileges (auto-elevates if needed)
+- ✅ Downloads TermTools from GitHub to `C:\Program Files\BasusTools\TermTools\`
+- ✅ Creates a virtual environment and installs dependencies
+- ✅ Sets up Windows context menu integration
+- ✅ Cleans up temporary files automatically
+
+**After installation, access TermTools via:**
+- Right-click on empty space → Show more options → Run TermTools
+- Or navigate to `C:\Program Files\BasusTools\TermTools\` and run `TermTools.py`
+
+**Alternative download method:**
+```powershell
+Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/aseshbasu-dev/termtools/main/install_termtools.py' -OutFile 'install_termtools.py'; python install_termtools.py
+```
 
 ### 🔧 Git Operations
 
 - **1**: Quick Commit & Push (add, commit, and push in one command)
+- **1.5**: Untrack, Commit & Push (remove files/folders from Git tracking)
 
 ### Python Environment Management
 
 - **2**: Delete and recreate .venv (with activation instructions)
+- **2.5**: Start Project (create .venv if needed, activate, install requirements, run code)
 - **3**: Create new requirements.txt file (choose from templates)
 - **4**: Delete all .venv folders (recursive search)
 
 ### 🏗️ Project Templates
 
 - **5**: Create Flask project scaffold (complete setup with blueprints)
+
+### 📁 Folder Operations
+
+- **11**: Copy Folder (Exclude .venv & __pycache__) (copy current folder with custom naming)
+
+### 🎯 Productivity Tools
+
+- **13**: Pomodoro Timer (focus timer with work/break sessions)
 
 ### 🧹 Clean Up Operations
 
