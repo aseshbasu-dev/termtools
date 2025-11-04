@@ -7,9 +7,9 @@ organized into modular components similar to Flask's blueprint system.
 """
 
 from .blueprint import Blueprint, TermToolsApp
-from .app import TermTools, create_app
+from .app import TermTools
 
 __version__ = "1.0.0"
 __author__ = "Asesh Basu"
 
-__all__ = ['Blueprint', 'TermToolsApp', 'TermTools', 'create_app']
+__all__ = ['Blueprint', 'TermToolsApp', 'TermTools']

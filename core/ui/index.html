@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TermTools - Professional Dark Theme</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="card">
+            <div class="card-header">
+                <h1 class="card-title text-center">🔧 TERMTOOLS</h1>
+            </div>
+            <div class="text-center">
+                <h3>Python Project Manager</h3>
+                <p class="text-muted">Built by Asesh Basu</p>
+                <p class="text-muted">📁 Current directory: /path/to/project</p>
+            </div>
+        </header>
+
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-4">
+                <nav class="nav">
+                    <h4 class="category-git">🔧 GIT OPERATIONS</h4>
+                    <a href="#" class="nav-item">Quick Commit & Push</a>
+                    
+                    <h4 class="category-python mt-3">🐍 PYTHON ENVIRONMENT</h4>
+                    <a href="#" class="nav-item">Create new .venv</a>
+                    <a href="#" class="nav-item">Create requirements.txt</a>
+                    <a href="#" class="nav-item">Delete .venv folders</a>
+                    
+                    <h4 class="category-project mt-3">📁 PROJECT TEMPLATES</h4>
+                    <a href="#" class="nav-item">Create Flask project</a>
+                    
+                    <h4 class="category-cleanup mt-3">🧹 CLEANUP</h4>
+                    <a href="#" class="nav-item">Delete __pycache__</a>
+                    <a href="#" class="nav-item">Clean build artifacts</a>
+                    <a href="#" class="nav-item">Delete thumbnails</a>
+                    
+                    <h4 class="category-power mt-3">⚡ POWER MANAGEMENT</h4>
+                    <a href="#" class="nav-item">Schedule shutdown</a>
+                    
+                    <div class="mt-3">
+                        <a href="#" class="nav-item category-help">❓ Show Help</a>
+                        <a href="#" class="nav-item status-error">❌ Exit</a>
+                    </div>
+                </nav>
+            </div>
+
+            <!-- Main content -->
+            <div class="col">
+                <!-- Action buttons -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Quick Actions</h3>
+                    </div>
+                    <div class="row">
+                        <div class="col-3">
+                            <button class="btn btn-primary mb-2" style="width: 100%;">Git Commit</button>
+                        </div>
+                        <div class="col-3">
+                            <button class="btn btn-success mb-2" style="width: 100%;">Create venv</button>
+                        </div>
+                        <div class="col-3">
+                            <button class="btn btn-warning mb-2" style="width: 100%;">Clean Project</button>
+                        </div>
+                        <div class="col-3">
+                            <button class="btn btn-error mb-2" style="width: 100%;">Shutdown</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Output console -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Output Console</h3>
+                    </div>
+                    <div class="console">✅ Git Operations module initialized
+🔧 Python Environment module initialized
+📁 Project Templates module initialized
+🧹 Cleanup module initialized
+⚡ Power Manager module initialized
+
+<span class="status-success">✅ Operation completed successfully!</span>
+<span class="status-info">ℹ️  Current directory: /path/to/project</span>
+<span class="status-warning">⚠️  Warning: No git repository found</span>
+<span class="status-error">❌ Error: Permission denied</span>
+
+Repository status:
+  - Modified files: 3
+  - Staged files: 0
+  - Untracked files: 1
+
+Ready for next operation...
+                    </div>
+                    <div class="mt-2 text-right">
+                        <button class="btn">Clear Output</button>
+                    </div>
+                </div>
+
+                <!-- Status card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">System Status</h3>
+                    </div>
+                    <div class="row">
+                        <div class="col-2">
+                            <p><strong>Python Version:</strong></p>
+                            <code>3.11.9</code>
+                        </div>
+                        <div class="col-2">
+                            <p><strong>Virtual Environment:</strong></p>
+                            <span class="status-success">✅ Active</span>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-2">
+                            <p><strong>Git Repository:</strong></p>
+                            <span class="status-info">📋 Clean</span>
+                        </div>
+                        <div class="col-2">
+                            <p><strong>Power Management:</strong></p>
+                            <span class="status-warning">⚠️ Shutdown scheduled</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="card text-center">
+            <p class="text-muted">TermTools Professional Dark Theme • No animations, clean design</p>
+        </footer>
+    </div>
+</body>
+</html>

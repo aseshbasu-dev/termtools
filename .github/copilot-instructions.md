@@ -1,7 +1,7 @@
 # TermTools - AI Coding Agent Instructions
 
 ## Project Overview
-TermTools is a terminal-based Python project manager with a **Flask-inspired Blueprint architecture**. Built by Asesh Basu, it provides modular functionality for Git operations, Python environment management, project scaffolding, cleanup, and system power management through an interactive CLI menu.
+TermTools is a Python project manager with a **Flask-inspired Blueprint architecture** and **wxPython GUI interface**. Built by Asesh Basu, it provides modular functionality for Git operations, Python environment management, project scaffolding, cleanup, and system power management through an intuitive GUI with buttons and split-button controls.
 
 ## Core Architecture Pattern: Blueprint System
 
@@ -41,11 +41,31 @@ def init_git_module(app):
 4. Register in `core/app.py._register_blueprints()`: add to `blueprints` list
 5. Use `@your_module_bp.on_init` for module initialization if needed
 
+**Module Template Pattern**:
+```python
+# core/modules/your_module.py
+from ..blueprint import Blueprint
+
+your_module_bp = Blueprint("your_module", "Description")
+
+class YourOperations:
+    @staticmethod
+    def some_operation():
+        print("🔧 Starting operation...")
+        # Implementation here
+        print("✅ Operation complete")
+
+@your_module_bp.route("12", "Operation Name", "Description", "🔧 YOUR CATEGORY", order=1)
+def handle_operation(app=None):
+    YourOperations.some_operation()
+```
+
 ### Menu Key Convention
-- Git operations: `"1"` (single digit)
+- Git operations: `"1"`
 - Python env: `"2"`, `"3"`, `"4"` 
 - Project templates: `"5"`
 - Cleanup: `"6"`, `"7"`, `"8"`
+- Folder copy: `"11"` (newer module)
 - Power manager: `"9"`
 - Exit: `"10"`, Help: `"0"` (reserved)
 
@@ -55,9 +75,9 @@ Assign new features keys following existing categories or create new number rang
 
 ### User Interaction Style
 - **Emoji prefixes**: All user messages use emojis (✅ success, ❌ error, 🔧 operations, 💡 tips)
-- **Confirmation prompts**: Destructive operations (delete, shutdown) require explicit confirmation (`input()` with "Y/n" or "YES")
+- **Confirmation prompts**: Destructive operations (delete, shutdown) require explicit confirmation with GUI dialogs
 - **Step indicators**: Multi-step operations show progress (`Step 1/3`, `Step 2/3`)
-- **Detailed output**: Always show command output with proper indentation (3 spaces: `   {output}`)
+- **Detailed output**: Always show command output in the GUI console window
 
 ### Error Handling Pattern
 ```python
@@ -73,13 +93,29 @@ except subprocess.CalledProcessError as e:
 Always capture both stdout and stderr, display them with indentation, and use early returns after errors.
 
 ### ANSI Color System
-`Colors` class in `core/app.py` provides terminal styling:
-- `Colors.NUMBER` for menu keys (bold yellow)
-- `Colors.ITEM` for menu items (green)
-- `Colors.CATEGORY` for category headers (bold blue)
-- `Colors.RESET` to reset formatting
+`Colors` class in `core/app.py` provides terminal styling for console output:
+- Colors are automatically stripped in GUI mode via OutputRedirector
+- Used for backend operations that print to console
+- GUI uses wxPython theming for visual styling
 
-Apply colors to all menu display, never to operation output (keep output clean for parsing).
+### GUI Architecture: Dual-Mode Operation
+TermTools operates in **GUI mode only** (no terminal mode), with sophisticated dual-input handling:
+- **GUI Dialogs**: Interactive inputs use `wx.TextEntryDialog`, `wx.MessageDialog` for user interaction
+- **Output Redirection**: `OutputRedirector` in `wx_app.py` captures `print()` statements and displays them in GUI console
+- **DarkTheme**: Professional color scheme defined in `core/wx_app.py` with category-specific colors
+- **SplitButton**: Custom control for menu items with multiple sub-options (dropdown menus)
+
+**Critical GUI Pattern**: Functions detect GUI mode and switch input methods:
+```python
+try:
+    import wx
+    wx_app = wx.GetApp()
+    if wx_app is not None:
+        return get_input_gui()  # Use wx dialogs
+except ImportError:
+    pass
+return get_input_terminal()  # Fallback (rarely used)
+```
 
 ## Windows-Specific Implementation Details
 
@@ -106,9 +142,11 @@ Use `os.name == 'nt'` for Windows-specific paths/commands:
 
 ## Key File Responsibilities
 
-- **`TermTools.py`**: Entry point, calls `create_app().run()`
-- **`core/app.py`**: Contains `TermTools` class (extends `TermToolsApp`), menu display, main loop, blueprint registration
+- **`TermTools.py`**: Entry point, calls `run_wx_app()` to start GUI
+- **`core/app.py`**: Contains `TermTools` class (extends `TermToolsApp`), blueprint registration, ANSI color system
+- **`core/wx_app.py`**: wxPython GUI application with `DarkTheme`, `SplitButton` custom controls, and output redirection
 - **`core/blueprint.py`**: Defines `Blueprint`, `MenuItem`, `TermToolsApp` base class with blueprint management
+- **`core/modules/__init__.py`**: Exports all blueprints in `__all__` list for easy import
 - **`core/modules/*.py`**: Individual feature modules, each exports a blueprint (e.g., `git_operations_bp`)
 - **`install_termtools.py`**: Downloads from GitHub, installs to Program Files, sets up context menu
 
@@ -125,7 +163,7 @@ python TermTools.py
 ```
 
 ### No test suite exists
-When adding features, manually test through the interactive menu. Test both success and error paths (e.g., run Git commands in non-git directories).
+When adding features, manually test through the GUI interface. Test both success and error paths (e.g., run Git commands in non-git directories).
 
 ## Configuration System
 

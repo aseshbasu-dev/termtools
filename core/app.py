@@ -14,16 +14,17 @@ from .modules.power_manager import power_manager_bp
 from .modules.python_env import python_env_bp
 from .modules.cleanup import cleanup_bp
 from .modules.git_operations import git_operations_bp
+from .modules.folder_copy import folder_copy_bp
 
 
-# ANSI Color codes for terminal styling
+# ANSI Color codes for terminal styling (optimized for dark terminals)
 class Colors:
-    """ANSI color codes for terminal output"""
+    """ANSI color codes for terminal output - optimized for dark backgrounds"""
     # Basic colors
     RESET = '\033[0m'
     BOLD = '\033[1m'
     
-    # Foreground colors
+    # Foreground colors (lighter shades for dark backgrounds)
     RED = '\033[91m'
     GREEN = '\033[92m'
     YELLOW = '\033[93m'
@@ -31,15 +32,22 @@ class Colors:
     MAGENTA = '\033[95m'
     CYAN = '\033[96m'
     WHITE = '\033[97m'
+    GRAY = '\033[90m'
     
-    # Custom color scheme for TermTools
-    HEADER = '\033[1m\033[96m'      # Bold Cyan for headers
-    AUTHOR = '\033[1m\033[95m'      # Bold Magenta for author
-    NUMBER = '\033[1m\033[93m'      # Bold Yellow for numbers
-    ITEM = '\033[92m'               # Green for item names
-    CATEGORY = '\033[1m\033[94m'    # Bold Blue for categories
-    DESCRIPTION = '\033[90m'        # Gray for descriptions
-    PATH = '\033[96m'               # Cyan for paths
+    # Custom color scheme for TermTools (dark theme optimized)
+    HEADER = '\033[1m\033[97m'        # Bold White for headers
+    AUTHOR = '\033[1m\033[96m'        # Bold Cyan for author
+    NUMBER = '\033[1m\033[93m'        # Bold Yellow for numbers (menu keys)
+    ITEM = '\033[92m'                 # Bright Green for item names
+    CATEGORY = '\033[1m\033[96m'      # Bold Cyan for categories
+    DESCRIPTION = '\033[37m'          # Light Gray for descriptions
+    PATH = '\033[94m'                 # Blue for paths
+    
+    # Status colors
+    SUCCESS = '\033[92m'              # Bright Green for success
+    ERROR = '\033[91m'                # Bright Red for errors
+    WARNING = '\033[93m'              # Bright Yellow for warnings
+    INFO = '\033[94m'                 # Blue for info
 
 
 class TermTools(TermToolsApp):
@@ -65,6 +73,7 @@ class TermTools(TermToolsApp):
             python_env_bp,
             project_templates_bp,
             cleanup_bp,
+            folder_copy_bp,
             power_manager_bp
         ]
         
@@ -74,43 +83,17 @@ class TermTools(TermToolsApp):
             except Exception as e:
                 print(f"❌ Error registering {blueprint.name}: {e}")
         
-    def display_menu(self):
-        """Display the main menu with all registered modules"""
-        print("\n" + "="*60)
-        print(f"{Colors.HEADER}                TERMTOOLS{Colors.RESET}")
-        print(f"{Colors.HEADER}        PYTHON PROJECT MANAGER{Colors.RESET}")
-        print(f"{Colors.AUTHOR}          Built by {self.author}{Colors.RESET}")
-        print("="*60)
-        print(f"Current directory: {Colors.PATH}{self.current_dir}{Colors.RESET}")
-        print("\nPlease select an option:")
-        
-        # Add help option first
-        print(f"\n{Colors.CATEGORY}❓ HELP:{Colors.RESET}")
-        print(f"{Colors.NUMBER}[0]{Colors.RESET}  {Colors.ITEM}Show help and menu tree diagram{Colors.RESET}")
-        
-        # Get menu items organized by category
-        categories = self.get_menu_items_by_category()
-        
-        # Display each category
-        for category, items in categories.items():
-            print(f"\n{Colors.CATEGORY}{category}:{Colors.RESET}")
-            for item in items:
-                print(f"{Colors.NUMBER}[{item.key}]{Colors.RESET}  {Colors.ITEM}{item.title}{Colors.RESET}  {Colors.DESCRIPTION}({item.description}){Colors.RESET}")
-        
-        print(f"\n{Colors.CATEGORY}❌ EXIT:{Colors.RESET}")
-        print(f"{Colors.NUMBER}[10]{Colors.RESET}  {Colors.ITEM}Exit{Colors.RESET}")
-        print("-"*60)
-        
     def show_help(self):
         """Display help and menu tree diagram"""
-        print("\n" + "="*55)
-        print(f"{Colors.HEADER}        🌳 TERMTOOLS - HELP{Colors.RESET}")
-        print(f"{Colors.AUTHOR}    Python Project Manager by {self.author}{Colors.RESET}")
-        print("="*55)
-        print("\n📂 Main Menu Tree Diagram:")
-        print(f"├── {Colors.CATEGORY}❓ HELP:{Colors.RESET}")
-        print(f"│   └── {Colors.NUMBER}[0]{Colors.RESET}. {Colors.ITEM}Show help and menu tree diagram{Colors.RESET}")
-        print("│")
+        help_text = []
+        help_text.append("="*55)
+        help_text.append(f"        🌳 TERMTOOLS - HELP")
+        help_text.append(f"    Python Project Manager by {self.author}")
+        help_text.append("="*55)
+        help_text.append("\n📂 Main Menu Tree Diagram:")
+        help_text.append(f"├── ❓ HELP:")
+        help_text.append(f"│   └── [0]. Show help and menu tree diagram")
+        help_text.append("│")
         
         # Get menu items organized by category
         categories = self.get_menu_items_by_category()
@@ -120,7 +103,7 @@ class TermTools(TermToolsApp):
             is_last_category = (i == len(category_list) - 1)
             category_prefix = "└──" if is_last_category else "├──"
             
-            print(f"{category_prefix} {Colors.CATEGORY}{category}:{Colors.RESET}")
+            help_text.append(f"{category_prefix} {category}:")
             
             for j, item in enumerate(items):
                 is_last_item = (j == len(items) - 1)
@@ -132,70 +115,24 @@ class TermTools(TermToolsApp):
                     item_prefix = "│   └──" if is_last_item else "│   ├──"
                     desc_prefix = "│       └──" if item.description else ""
                 
-                print(f"{item_prefix} {Colors.NUMBER}[{item.key}]{Colors.RESET}. {Colors.ITEM}{item.title}{Colors.RESET}")
+                help_text.append(f"{item_prefix} [{item.key}]. {item.title}")
                 if item.description:
-                    print(f"{desc_prefix} {Colors.DESCRIPTION}({item.description}){Colors.RESET}")
+                    help_text.append(f"{desc_prefix} ({item.description})")
             
             if not is_last_category:
-                print("│")
+                help_text.append("│")
         
-        print("│")
-        print(f"└── {Colors.CATEGORY}❌ EXIT:{Colors.RESET}")
-        print(f"    └── {Colors.NUMBER}[10]{Colors.RESET}. {Colors.ITEM}Exit{Colors.RESET}")
-        print()
-        print("📋 Tree Diagram Legend:")
-        print("├── Branch with more items below")
-        print("└── Last item in branch")
-        print("│   Vertical connection line")
-        print()
-        print(f"💡 Tip: Use option {Colors.NUMBER}[0]{Colors.RESET} anytime to see this help diagram!")
-        print(f"🏗️  {Colors.AUTHOR}Built by {self.author}{Colors.RESET} - {Colors.HEADER}TermTools v{self.version}{Colors.RESET}")
+        help_text.append("│")
+        help_text.append(f"└── ❌ EXIT:")
+        help_text.append(f"    └── [10]. Exit")
+        help_text.append("")
+        help_text.append("📋 Tree Diagram Legend:")
+        help_text.append("├── Branch with more items below")
+        help_text.append("└── Last item in branch")
+        help_text.append("│   Vertical connection line")
+        help_text.append("")
+        help_text.append(f"💡 Tip: Use option [0] anytime to see this help diagram!")
+        help_text.append(f"🏗️  Built by {self.author} - TermTools v{self.version}")
         
-    def run(self):
-        """Main application loop"""
-        while True:
-            try:
-                self.display_menu()
-                choice = input(f"\n{Colors.YELLOW}Enter your choice (0-10): {Colors.RESET}").strip()
-                
-                if choice == "0":
-                    self.show_help()
-                elif choice == "10":
-                    print(f"\n👋 {Colors.GREEN}Thank you for using TermTools!{Colors.RESET}")
-                    print(f"🏗️  {Colors.AUTHOR}Built by {self.author}{Colors.RESET} - {Colors.CYAN}Happy coding!{Colors.RESET}")
-                    self.cleanup()
-                    break
-                else:
-                    # Try to execute the menu item
-                    success = self.execute_menu_item(choice)
-                    if not success:
-                        print(f"\n{Colors.RED}❌ Invalid choice '{choice}'. Please enter 0-10.{Colors.RESET}")
-                        
-                # Wait for user to press Enter before showing menu again
-                if choice in self.menu_items or choice == "0":
-                    input(f"\n{Colors.CYAN}Press Enter to continue...{Colors.RESET}")
-                    
-            except KeyboardInterrupt:
-                print(f"\n\n⚠️  {Colors.YELLOW}Operation cancelled by user.{Colors.RESET}")
-                print(f"👋 {Colors.GREEN}Thank you for using TermTools!{Colors.RESET}")
-                print(f"🏗️  {Colors.AUTHOR}Built by {self.author}{Colors.RESET}")
-                self.cleanup()
-                break
-            except Exception as e:
-                print(f"\n{Colors.RED}❌ An unexpected error occurred: {e}{Colors.RESET}")
-                input(f"{Colors.CYAN}Press Enter to continue...{Colors.RESET}")
-
-
-def create_app():
-    """
-    Application factory function (similar to Flask pattern)
-    Creates and configures the TermTools application
-    """
-    app = TermTools()
-    
-    # Set additional configuration
-    app.set_config("debug", False)
-    app.set_config("version", app.version)
-    app.set_config("author", app.author)
-    
-    return app
+        # Print help text for GUI console
+        print("\n".join(help_text))

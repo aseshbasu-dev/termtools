@@ -4,10 +4,15 @@ Built by Asesh Basu
 
 This module provides system power management functionality including
 scheduling shutdown operations with various time options.
+State is persisted in JSON format in core/data/shutdown_state.json.
 """
 
 import os
 import subprocess
+import wx
+import json
+from datetime import datetime, timedelta
+from pathlib import Path
 from ..blueprint import Blueprint
 
 # Create the blueprint for power management
@@ -20,106 +25,259 @@ class SystemPowerManager:
     def __init__(self):
         self.shutdown_timer = None
         self.shutdown_active = False
+        # Use JSON file in core/data directory
+        self.state_file = Path("core/data/shutdown_state.json")
+    
+    def _show_gui_confirmation(self, message, title="Confirm Action"):
+        """Show GUI confirmation dialog"""
+        try:
+            # Check if we're in a GUI environment by trying to create a dialog
+            if wx.GetApp():
+                dlg = wx.MessageDialog(
+                    None,  # Use None as parent, wx will find appropriate parent
+                    message,
+                    title,
+                    wx.YES_NO | wx.ICON_QUESTION | wx.NO_DEFAULT
+                )
+                result = dlg.ShowModal()
+                dlg.Destroy()
+                return result == wx.ID_YES
+            else:
+                print(f"❌ GUI unavailable - TermTools requires GUI mode")
+                print(f"   Message: {message}")
+                return False
+        except Exception as e:
+            print(f"❌ Error showing GUI confirmation: {e}")
+            return False
+    
+    def _show_gui_error(self, message, title="Error"):
+        """Show GUI error dialog if available, fallback to terminal"""
+        try:
+            # Check if we're in a GUI environment
+            if wx.GetApp():
+                wx.MessageBox(
+                    message,
+                    title,
+                    wx.OK | wx.ICON_ERROR
+                )
+                return
+            print(f"❌ {message}")
+        except:
+            print(f"❌ {message}")
+    
+    def _show_gui_info(self, message, title="Information"):
+        """Show GUI info dialog if available, fallback to terminal"""
+        try:
+            # Check if we're in a GUI environment
+            if wx.GetApp():
+                wx.MessageBox(
+                    message,
+                    title,
+                    wx.OK | wx.ICON_INFORMATION
+                )
+                return
+            print(f"ℹ️  {message}")
+        except:
+            print(f"ℹ️  {message}")
+        
+    def _save_shutdown_state(self, scheduled=False, scheduled_time=None, description=""):
+        """Save shutdown state to JSON file"""
+        state = {
+            'scheduled': scheduled,
+            'scheduled_time': scheduled_time.isoformat() if scheduled_time else None,
+            'description': description,
+            'last_updated': datetime.now().isoformat()
+        }
+        
+        try:
+            # Ensure the directory exists
+            self.state_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.state_file, 'w') as f:
+                json.dump(state, f, indent=2)
+        except Exception as e:
+            print(f"⚠️  Warning: Could not save shutdown state: {e}")
+    
+    def _load_shutdown_state(self):
+        """Load shutdown state from JSON file"""
+        if not self.state_file.exists():
+            return {'scheduled': False, 'scheduled_time': None, 'description': '', 'last_updated': None}
+        
+        try:
+            with open(self.state_file, 'r') as f:
+                state = json.load(f) or {}
+                
+            # Convert scheduled_time back to datetime if present
+            if state.get('scheduled_time'):
+                try:
+                    state['scheduled_time'] = datetime.fromisoformat(state['scheduled_time'])
+                except:
+                    state['scheduled_time'] = None
+                    state['scheduled'] = False
+                    
+            return state
+        except Exception as e:
+            print(f"⚠️  Warning: Could not load shutdown state: {e}")
+            return {'scheduled': False, 'scheduled_time': None, 'description': '', 'last_updated': None}
+    
+    def get_shutdown_status(self):
+        """Get current shutdown status with time remaining"""
+        state = self._load_shutdown_state()
+        
+        if not state.get('scheduled') or not state.get('scheduled_time'):
+            return {'scheduled': False, 'time_remaining': None, 'description': ''}
+        
+        scheduled_time = state['scheduled_time']
+        now = datetime.now()
+        
+        # Check if shutdown time has passed
+        if now >= scheduled_time:
+            # Clear the state as shutdown should have occurred
+            self._save_shutdown_state(scheduled=False)
+            return {'scheduled': False, 'time_remaining': None, 'description': ''}
+        
+        time_remaining = scheduled_time - now
+        return {
+            'scheduled': True,
+            'time_remaining': time_remaining,
+            'description': state.get('description', ''),
+            'scheduled_time': scheduled_time
+        }
         
     def schedule_shutdown(self):
-        """Interactive menu for scheduling system shutdown"""
+        """Interactive menu for scheduling system shutdown via GUI"""
         print("\n💻 System Power Management")
         print("="*50)
         print("⚠️  WARNING: This will schedule a system shutdown!")
         print("⚠️  Make sure to save all your work before proceeding.")
         print("="*50)
         
-        print("\nShutdown options:")
-        print("1️⃣  Shutdown in 1 hour")
-        print("2️⃣  Shutdown in 2 hours") 
-        print("3️⃣  Shutdown in 3 hours")
-        print("4️⃣  Custom time (minutes)")
-        print("5️⃣  Cancel any scheduled shutdown")
-        print("6️⃣  Check shutdown status")
-        print("0️⃣  Return to main menu")
+        choices = [
+            "Shutdown in 1 hour",
+            "Shutdown in 2 hours", 
+            "Shutdown in 3 hours",
+            "Custom time (minutes)",
+            "Cancel any scheduled shutdown",
+            "Check shutdown status"
+        ]
         
         try:
-            choice = input("\nEnter your choice (0-6): ").strip()
-            
-            if choice == "1":
-                self._schedule_shutdown_minutes(60, "1 hour")
-            elif choice == "2":
-                self._schedule_shutdown_minutes(120, "2 hours")
-            elif choice == "3":
-                self._schedule_shutdown_minutes(180, "3 hours")
-            elif choice == "4":
-                self._custom_shutdown_time()
-            elif choice == "5":
-                self._cancel_shutdown()
-            elif choice == "6":
-                self._check_shutdown_status()
-            elif choice == "0":
-                return
-            else:
-                print("❌ Invalid choice. Please enter 0-6.")
+            # Check if we're in a GUI environment
+            if wx.GetApp():
+                dlg = wx.SingleChoiceDialog(
+                    None,
+                    "Select shutdown option:",
+                    "Power Manager - Shutdown Options",
+                    choices
+                )
                 
-        except KeyboardInterrupt:
-            print("\n⚠️  Operation cancelled.")
+                if dlg.ShowModal() == wx.ID_OK:
+                    choice_index = dlg.GetSelection()
+                    dlg.Destroy()
+                    
+                    if choice_index == 0:
+                        self._schedule_shutdown_minutes(60, "1 hour")
+                    elif choice_index == 1:
+                        self._schedule_shutdown_minutes(120, "2 hours")
+                    elif choice_index == 2:
+                        self._schedule_shutdown_minutes(180, "3 hours")
+                    elif choice_index == 3:
+                        self._custom_shutdown_time()
+                    elif choice_index == 4:
+                        self._cancel_shutdown()
+                    elif choice_index == 5:
+                        self._check_shutdown_status()
+                else:
+                    dlg.Destroy()
+                    print("⚠️  Operation cancelled.")
+            else:
+                print("❌ GUI unavailable - TermTools requires GUI mode")
+                
         except Exception as e:
-            print(f"❌ Error: {e}")
+            print(f"❌ Error showing shutdown options: {e}")
     
     def _schedule_shutdown_minutes(self, minutes, description):
         """Schedule shutdown for specified minutes"""
-        # Confirm the action
-        print(f"\n⚠️  You are about to schedule a shutdown in {description}")
-        print(f"💻 The system will shut down in {minutes} minutes")
-        confirm = input("Are you sure? Type 'YES' to confirm or ENTER to cancel: ").strip()
+        # Confirm the action using GUI or terminal
+        confirmation_message = f"You are about to schedule a shutdown in {description}.\n\nThe system will shut down in {minutes} minutes."
         
-        if confirm.casefold() != "yes":
-            print("❌ Shutdown cancelled.")
+        if not self._show_gui_confirmation(confirmation_message, "Confirm Shutdown"):
+            self._show_gui_info("Shutdown cancelled.", "Cancelled")
             return
             
         try:
+            scheduled_time = datetime.now() + timedelta(minutes=minutes)
+            
             if os.name == 'nt':  # Windows
                 # Use Windows shutdown command
                 subprocess.run(['shutdown', '/s', '/t', str(minutes * 60)], check=True)
-                print(f"✅ Shutdown scheduled successfully!")
-                print(f"🕒 System will shutdown in {description}")
-                print(f"💡 Use 'shutdown /a' in command prompt to cancel")
+                success_message = f"✅ Shutdown scheduled successfully!\n🕒 System will shutdown in {description}\n💡 Use 'shutdown /a' in command prompt to cancel"
+                self._show_gui_info(success_message, "Shutdown Scheduled")
             else:  # Unix-like systems
                 subprocess.run(['sudo', 'shutdown', '-h', f"+{minutes}"], check=True)
-                print(f"✅ Shutdown scheduled successfully!")
-                print(f"🕒 System will shutdown in {description}")
-                print(f"💡 Use 'sudo shutdown -c' to cancel")
+                success_message = f"✅ Shutdown scheduled successfully!\n🕒 System will shutdown in {description}\n💡 Use 'sudo shutdown -c' to cancel"
+                self._show_gui_info(success_message, "Shutdown Scheduled")
                 
             self.shutdown_active = True
             
+            # Save the shutdown state
+            self._save_shutdown_state(
+                scheduled=True,
+                scheduled_time=scheduled_time,
+                description=description
+            )
+            
         except subprocess.CalledProcessError as e:
-            print(f"❌ Failed to schedule shutdown: {e}")
+            error_message = f"Failed to schedule shutdown: {e}"
+            self._show_gui_error(error_message)
         except FileNotFoundError:
-            print("❌ Shutdown command not found. This feature may not be available on your system.")
+            error_message = "Shutdown command not found. This feature may not be available on your system."
+            self._show_gui_error(error_message)
     
     def _custom_shutdown_time(self):
-        """Schedule shutdown for custom time in minutes"""
+        """Schedule shutdown for custom time in minutes via GUI"""
         try:
-            minutes = input("Enter minutes until shutdown (1-1440): ").strip()
-            minutes = int(minutes)
-            
-            if minutes < 1 or minutes > 1440:  # Max 24 hours
-                print("❌ Invalid time. Please enter 1-1440 minutes.")
-                return
+            # Check if we're in a GUI environment
+            if wx.GetApp():
+                dlg = wx.TextEntryDialog(
+                    None,
+                    "Enter minutes until shutdown (1-1440):",
+                    "Custom Shutdown Time",
+                    "60"  # Default to 1 hour
+                )
                 
-            hours = minutes // 60
-            remaining_minutes = minutes % 60
-            
-            if hours > 0:
-                description = f"{hours} hour{'s' if hours > 1 else ''}"
-                if remaining_minutes > 0:
-                    description += f" and {remaining_minutes} minute{'s' if remaining_minutes > 1 else ''}"
+                if dlg.ShowModal() == wx.ID_OK:
+                    minutes_str = dlg.GetValue().strip()
+                    dlg.Destroy()
+                    
+                    try:
+                        minutes = int(minutes_str)
+                        
+                        if minutes < 1 or minutes > 1440:  # Max 24 hours
+                            self._show_gui_error("Invalid time. Please enter 1-1440 minutes.", "Invalid Input")
+                            return
+                            
+                        hours = minutes // 60
+                        remaining_minutes = minutes % 60
+                        
+                        if hours > 0:
+                            description = f"{hours} hour{'s' if hours > 1 else ''}"
+                            if remaining_minutes > 0:
+                                description += f" and {remaining_minutes} minute{'s' if remaining_minutes > 1 else ''}"
+                        else:
+                            description = f"{minutes} minute{'s' if minutes > 1 else ''}"
+                            
+                        self._schedule_shutdown_minutes(minutes, description)
+                        
+                    except ValueError:
+                        self._show_gui_error("Invalid input. Please enter a valid number.", "Invalid Input")
+                else:
+                    dlg.Destroy()
+                    print("⚠️  Operation cancelled.")
             else:
-                description = f"{minutes} minute{'s' if minutes > 1 else ''}"
+                print("❌ GUI unavailable - TermTools requires GUI mode")
                 
-            self._schedule_shutdown_minutes(minutes, description)
-            
-        except ValueError:
-            print("❌ Invalid input. Please enter a valid number.")
         except Exception as e:
-            print(f"❌ Error: {e}")
+            print(f"❌ Error getting custom shutdown time: {e}")
     
     def _cancel_shutdown(self):
         """Cancel any scheduled shutdown"""
@@ -127,20 +285,24 @@ class SystemPowerManager:
             if os.name == 'nt':  # Windows
                 result = subprocess.run(['shutdown', '/a'], capture_output=True, text=True)
                 if result.returncode == 0:
-                    print("✅ Shutdown cancelled successfully!")
+                    self._show_gui_info("Shutdown cancelled successfully!", "Shutdown Cancelled")
                 else:
-                    print("ℹ️  No shutdown was scheduled or shutdown already cancelled.")
+                    self._show_gui_info("No shutdown was scheduled or shutdown already cancelled.", "No Shutdown Found")
             else:  # Unix-like systems
                 result = subprocess.run(['sudo', 'shutdown', '-c'], capture_output=True, text=True)
                 if result.returncode == 0:
-                    print("✅ Shutdown cancelled successfully!")
+                    self._show_gui_info("Shutdown cancelled successfully!", "Shutdown Cancelled")
                 else:
-                    print("ℹ️  No shutdown was scheduled or shutdown already cancelled.")
+                    self._show_gui_info("No shutdown was scheduled or shutdown already cancelled.", "No Shutdown Found")
                     
             self.shutdown_active = False
             
+            # Clear the shutdown state
+            self._save_shutdown_state(scheduled=False)
+            
         except Exception as e:
-            print(f"❌ Error cancelling shutdown: {e}")
+            error_message = f"Error cancelling shutdown: {e}"
+            self._show_gui_error(error_message)
     
     def _check_shutdown_status(self):
         """Check if shutdown is scheduled"""

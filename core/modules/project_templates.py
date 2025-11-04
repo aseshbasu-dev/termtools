@@ -28,10 +28,31 @@ class ProjectTemplates:
             # Create main project directory
             project_path = Path(project_name)
             if project_path.exists():
-                response = input(f"Directory '{project_name}' already exists. Overwrite? (y/N): ")
-                if response.lower() != 'y':
+                # Use GUI confirmation dialog
+                try:
+                    import wx
+                    if wx.GetApp():
+                        dlg = wx.MessageDialog(
+                            None,
+                            f"Directory '{project_name}' already exists. Overwrite?",
+                            "Directory Exists",
+                            wx.YES_NO | wx.ICON_QUESTION | wx.NO_DEFAULT
+                        )
+                        result = dlg.ShowModal()
+                        dlg.Destroy()
+                        
+                        if result != wx.ID_YES:
+                            print("❌ Operation cancelled.")
+                            return
+                    else:
+                        print(f"❌ GUI unavailable - Directory '{project_name}' already exists")
+                        print("❌ Operation cancelled.")
+                        return
+                except Exception as e:
+                    print(f"❌ Error showing confirmation dialog: {e}")
                     print("❌ Operation cancelled.")
                     return
+                    
                 shutil.rmtree(project_path)
                 
             project_path.mkdir()
@@ -492,17 +513,43 @@ def create_flask_project_scaffold(app=None):
     print("\n🏗️  Flask Project Scaffold Generator")
     print("Built by Asesh Basu - TermTools")
     
-    # Get project name from user
-    while True:
-        project_name = input("\nEnter project name (default: flask_project): ").strip()
-        if not project_name:
-            project_name = "flask_project"
-        
-        # Validate project name
-        if project_name.replace('_', '').replace('-', '').isalnum():
-            break
+    # Get project name from user via GUI
+    project_name = None
+    try:
+        import wx
+        if wx.GetApp():
+            dlg = wx.TextEntryDialog(
+                None,
+                "Enter project name:",
+                "Flask Project Scaffold",
+                "flask_project"  # Default value
+            )
+            dlg.SetSize(wx.Size(400, 150))
+            
+            if dlg.ShowModal() == wx.ID_OK:
+                project_name = dlg.GetValue().strip()
+                if not project_name:
+                    project_name = "flask_project"
+                dlg.Destroy()
+                
+                # Validate project name
+                if not project_name.replace('_', '').replace('-', '').isalnum():
+                    wx.MessageBox(
+                        "Project name should contain only letters, numbers, underscores, and hyphens.",
+                        "Invalid Project Name",
+                        wx.OK | wx.ICON_ERROR
+                    )
+                    return
+            else:
+                dlg.Destroy()
+                print("❌ Operation cancelled.")
+                return
         else:
-            print("❌ Project name should contain only letters, numbers, underscores, and hyphens.")
+            print("❌ GUI unavailable - TermTools requires GUI mode")
+            return
+    except Exception as e:
+        print(f"❌ Error getting project name: {e}")
+        return
     
     # Use the ProjectTemplates class to create the scaffold
     ProjectTemplates.create_flask_scaffold(project_name)

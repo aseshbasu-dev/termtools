@@ -127,10 +127,29 @@ class CleanupOperations:
     def delete_thumbnails():
         """Delete all thumbnail files recursively from current directory."""
         print("\n🗑️  Deleting thumbnail files recursively...")
+        print("📁 Starting recursive scan from current directory...")
         
         deleted_count = 0
         total_size = 0
         current_dir = os.getcwd()
+        
+        # Common thumbnail file patterns (case-insensitive)
+        thumbnail_patterns = [
+            'thumbs.db',      # Windows thumbnail cache
+            'desktop.ini',    # Windows folder customization
+            '.ds_store',      # macOS folder metadata
+            'thumb*.jpg',     # Generic thumbnail images
+            'thumb*.jpeg',    # Generic thumbnail images
+            'thumb*.png',     # Generic thumbnail images
+            'thumb*.gif',     # Generic thumbnail images
+            'thumb*.bmp',     # Generic thumbnail images
+            'thumbnail*.jpg', # Thumbnail images
+            'thumbnail*.jpeg',# Thumbnail images
+            'thumbnail*.png', # Thumbnail images
+            '*.thumbdata*',   # Android thumbnail cache
+            'ehthumbs.db',    # Windows Vista+ thumbnail cache
+            'ehthumbs_vista.db' # Windows Vista thumbnail cache
+        ]
         
         # Check if send2trash is available, try to install if not
         try:
@@ -148,17 +167,35 @@ class CleanupOperations:
                 print("❌ Failed to install send2trash. Recycle bin will not be available.")
                 recycle_available = False
         
+        print(f"🔍 Scanning for thumbnail files in: {current_dir}")
+        print("   Patterns to match: Thumbs.db, desktop.ini, .DS_Store, thumb*.*, thumbnail*.*, etc.")
+        
         # Walk through all directories recursively
+        scanned_dirs = 0
         for root, dirs, files in os.walk(current_dir):
+            scanned_dirs += 1
+            if scanned_dirs % 50 == 0:  # Progress indicator every 50 directories
+                print(f"   📂 Scanned {scanned_dirs} directories...")
+                
             for file in files:
-                if "thumb" in file.lower():
+                file_lower = file.lower()
+                is_thumbnail = False
+                
+                # Check against all thumbnail patterns
+                for pattern in thumbnail_patterns:
+                    if fnmatch.fnmatch(file_lower, pattern.lower()):
+                        is_thumbnail = True
+                        break
+                
+                if is_thumbnail:
                     file_path = os.path.join(root, file)
                     try:
                         # Calculate size before deletion
                         file_size = os.path.getsize(file_path)
                         
-                        # Skip files larger than 1MB to avoid deleting non-thumbnail files
-                        if file_size > 1024 * 1024:
+                        # Skip files larger than 10MB to avoid deleting non-thumbnail files
+                        # (increased from 1MB to handle larger thumbnail caches)
+                        if file_size > 10 * 1024 * 1024:
                             print(f"⏭️  Skipped large file: {file_path} ({file_size / (1024 * 1024):.2f} MB)")
                             continue
                         
@@ -184,6 +221,7 @@ class CleanupOperations:
                     except Exception as e:
                         print(f"❌ Error accessing {file_path}: {e}")
                         
+        print(f"📊 Scan complete: {scanned_dirs} directories processed")
         if deleted_count == 0:
             print("❌ No thumbnail files found.")
         else:
@@ -207,7 +245,7 @@ class CleanupOperations:
 
 
 # Register blueprint routes using decorators
-@cleanup_bp.route("6", "Delete only __pycache__ folders", "Python cache cleanup", "🧹 CLEAN UP OPERATIONS", 1)
+@cleanup_bp.route("6", "Delete __pycache__ folders recursively", "Python cache cleanup", "🧹 CLEAN UP OPERATIONS", 1)
 def delete_pycache_only(app=None):
     """Delete only __pycache__ folders recursively"""
     CleanupOperations.delete_pycache_only()
@@ -219,7 +257,7 @@ def clean_build_artifacts(app=None):
     CleanupOperations.clean_build_artifacts()
 
 
-@cleanup_bp.route("8", "Delete thumbnail files", "With safety checks", "🧹 CLEAN UP OPERATIONS", 3)
+@cleanup_bp.route("8", "Delete thumbnail files recursively", "Thumbs.db, desktop.ini, .DS_Store, etc.", "🧹 CLEAN UP OPERATIONS", 3)
 def delete_thumbnails(app=None):
     """Delete thumbnail files with safety checks"""
     CleanupOperations.delete_thumbnails()

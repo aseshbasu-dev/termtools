@@ -1,70 +1,60 @@
 # TermTools - Modular Python Project Manager
 
-A comprehensive terminal-based application for Python project management tasks, built with a modular blueprint architecture similar to Flask.
+A comprehensive Python project manager with **wxPython GUI** and modular blueprint architecture similar to Flask.
 
 **Built by Asesh Basu**
 
 ## 🌟 Features
 
-- ** Python Environment Management**: Virtual environment creation, requirements management
+- **🎨 Modern GUI**: wxPython interface with button-based navigation and split buttons for multi-option features
+- **🐍 Python Environment Management**: Virtual environment creation, requirements management
+- **🔧 Git Operations**: Quick commit & push with interactive prompts
 - **🧹 Clean Up Operations**: Remove cache files, build artifacts, and thumbnails
 - **🏗️ Project Templates**: Generate complete Flask project scaffolds with blueprints
 - **💻 System Power Management**: Schedule system shutdowns with various time options
+- **📊 Real-time Output Console**: See command results as they execute
 - **🔧 Modular Architecture**: Blueprint system for easy extensibility
 
 ## 🏗️ Architecture
 
-TermTools uses a modular blueprint architecture inspired by Flask, allowing for easy extension and maintenance:
-
-```
-TermTools/
-├── TermTools.py           # Main entry point
-├── core/                  # Core application framework
-│   ├── __init__.py       
-│   ├── blueprint.py       # Blueprint system (like Flask)
-│   ├── app.py            # Main application class
-│   └── modules/          # Individual feature modules
-│       ├── __init__.py
-│       ├── python_env.py
-│       ├── project_templates.py
-│       ├── cleanup.py
-│       └── power_manager.py
-├── setup_context_menu.py
-└── start_project.bat
-```
+TermTools uses a modular blueprint architecture inspired by Flask, allowing for easy extension and maintenance
 
 ## 🚀 Quick Start
 
-1. **Install the application to your system in a single line of code**:
-    '''
-    Open in PowerShell as Administrator and run:
-    (Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/aseshbasu-dev/termtools/main/install_termtools.py').Content | python -
-    '''
+### Run TermTools
 
+Open PowerShell as Administrator and run:
 
-2.  **Navigate the menu** using the numbered options (0-10)
+Install python first with: 
 
-3. **Get help** anytime by selecting option `0`
+```powershell
+(Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/aseshbasu-dev/termtools/main/install_termtools.py').Content | python -
+```
 
 ## 📋 Available Modules
 
 ### 🔧 Git Operations
+
 - **1**: Quick Commit & Push (add, commit, and push in one command)
 
-###  Python Environment Management  
+### Python Environment Management
+
 - **2**: Delete and recreate .venv (with activation instructions)
 - **3**: Create new requirements.txt file (choose from templates)
 - **4**: Delete all .venv folders (recursive search)
 
 ### 🏗️ Project Templates
+
 - **5**: Create Flask project scaffold (complete setup with blueprints)
 
 ### 🧹 Clean Up Operations
-- **6**: Delete only __pycache__ folders
+
+- **6**: Delete only **__pycache__** folders
 - **7**: Clean up build artifacts (.pyc, .pyo, dist/, build/, etc.)
 - **8**: Delete thumbnail files (with safety checks)
 
 ### 💻 System Power Management
+
 - **9**: Schedule system shutdown (1hr, 2hr, 3hr, custom)
 
 ## 🔧 Extending TermTools
@@ -129,64 +119,6 @@ The blueprint system provides:
 - **Application Context**: Access to the main app instance
 - **Configuration Management**: Built-in config system
 - **Error Handling**: Automatic error handling and reporting
-
-## 📖 Example: Creating a Git Module
-
-```python
-# core/modules/git_operations.py
-import subprocess
-from ..blueprint import Blueprint
-
-git_bp = Blueprint("git_operations", "Git repository management")
-
-@git_bp.route("g1", "Initialize Git repository", "Create new git repo", "🔧 GIT OPERATIONS", 1)
-def init_git_repo(app=None):
-    """Initialize a new Git repository"""
-    try:
-        subprocess.run(['git', 'init'], check=True)
-        print("✅ Git repository initialized successfully!")
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Error initializing Git repository: {e}")
-
-@git_bp.route("g2", "Add all files", "Stage all changes", "🔧 GIT OPERATIONS", 2)  
-def git_add_all(app=None):
-    """Add all files to Git staging"""
-    try:
-        subprocess.run(['git', 'add', '.'], check=True)
-        print("✅ All files added to staging!")
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Error adding files: {e}")
-
-@git_bp.on_init
-def init_git_module(app):
-    """Initialize Git module"""
-    print("🔧 Git Operations module initialized")
-    app.set_config("git_enabled", True)
-```
-
-## 📚 API Reference
-
-### Blueprint Class
-
-```python
-class Blueprint:
-    def __init__(name: str, description: str = "")
-    def add_menu_item(key: str, title: str, description: str, handler: Callable, category: str = "General", order: int = 0)
-    def route(key: str, title: str, description: str, category: str = "General", order: int = 0)  # Decorator
-    def on_init(func: Callable)  # Decorator
-    def on_cleanup(func: Callable)  # Decorator
-```
-
-### TermToolsApp Class
-
-```python
-class TermToolsApp:
-    def register_blueprint(blueprint: Blueprint)
-    def get_menu_item(key: str) -> Optional[MenuItem]
-    def execute_menu_item(key: str, *args, **kwargs) -> bool
-    def set_config(key: str, value: Any)
-    def get_config(key: str, default: Any = None) -> Any
-```
 
 ## 🛠️ Development
 
