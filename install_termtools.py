@@ -1,17 +1,6 @@
 '''
 CONFIGURABLE PYTHON PROJECT INSTALLER
 
-This script can be used as a one-line installer from GitHub:
-Open PowerShell as Administrator and run:
-(Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/aseshbasu-dev/termtools/main/install_termtools.py').Content | python -
-
-OR download and run directly:
-Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/aseshbasu-dev/termtools/main/install_termtools.py' -OutFile 'install_termtools.py'; python install_termtools.py
-
-🔧 REUSABLE FOR ANY PROJECT:
-Modify the configuration variables at the top of this script to adapt it for any GitHub repository.
-Simply change REPO_OWNER, REPO_NAME, TARGET_BASE_FOLDER, TARGET_APP_FOLDER, and other settings.
-
 Original project: TermTools - Python Project Manager
 at: https://github.com/aseshbasu-dev/termtools.git
 
@@ -96,7 +85,8 @@ REGISTRY_KEY_PATH = r"Software\Classes\Directory\Background\shell\TermTools"
 # Installation Behavior
 AUTO_UPGRADE_PIP = True                     # Upgrade pip in virtual environment
 INSTALL_REQUIREMENTS = True                 # Install from requirements.txt if present
-CLEANUP_ON_ERROR = True                     # Clean up temp files on error
+CLEANUP_ON_ERROR = False                    # Clean up temp files on error (disabled for debugging)
+CONTINUE_ON_REQUIREMENTS_FAILURE = True     # Continue installation even if requirements fail
 
 # IMPORTANT NOTE: VENV_IN_APPDATA=True helps avoid permission issues when creating
 # virtual environments in Program Files. The venv will be created in:
@@ -312,45 +302,81 @@ try:
             print("   Using virtual environment Python...")
             venv_python = os.path.join(venv_path, "Scripts", "python.exe")
             venv_pip = os.path.join(venv_path, "Scripts", "pip.exe")
-            python_to_use = venv_python
-            pip_to_use = venv_pip
+            
+            # Verify venv python exists
+            if not os.path.exists(venv_python):
+                print(f"⚠️  Virtual environment Python not found at: {venv_python}")
+                print("   Falling back to system Python...")
+                python_to_use = python_executable
+                use_venv = False
+            else:
+                python_to_use = venv_python
+                use_venv = True
         else:
             # Use system Python
             print("   Using system Python (no venv available)...")
             python_to_use = python_executable
-            pip_to_use = python_executable  # Will use python -m pip
+            use_venv = False
+        
+        # Always use python -m pip instead of direct pip executable for reliability
+        pip_cmd_base = [python_to_use, "-m", "pip"]
         
         # Upgrade pip first if enabled
         if AUTO_UPGRADE_PIP:
             try:
-                if venv_path is not None:
-                    result = subprocess.run([python_to_use, "-m", "pip", "install", "--upgrade", "pip"], 
+                print("   Upgrading pip...")
+                if use_venv:
+                    result = subprocess.run(pip_cmd_base + ["install", "--upgrade", "pip"], 
                                           capture_output=True, text=True, check=True, cwd=target_app)
                 else:
-                    result = subprocess.run([python_to_use, "-m", "pip", "install", "--upgrade", "pip", "--user"], 
+                    result = subprocess.run(pip_cmd_base + ["install", "--upgrade", "pip", "--user"], 
                                           capture_output=True, text=True, check=True, cwd=target_app)
                 print("✅ Pip upgraded successfully")
             except subprocess.CalledProcessError as e:
                 print(f"⚠️  Warning: Could not upgrade pip: {e}")
                 if e.stderr:
                     print(f"   {e.stderr.strip()}")
+                # Continue anyway - pip might still work for installation
         
         # Install requirements
         try:
-            if venv_path is not None:
-                result = subprocess.run([pip_to_use, "install", "-r", REQUIREMENTS_FILE], 
+            print("   Installing requirements...")
+            if use_venv:
+                result = subprocess.run(pip_cmd_base + ["install", "-r", REQUIREMENTS_FILE], 
                                       capture_output=True, text=True, check=True, cwd=target_app)
             else:
-                result = subprocess.run([python_to_use, "-m", "pip", "install", "-r", REQUIREMENTS_FILE, "--user"], 
+                result = subprocess.run(pip_cmd_base + ["install", "-r", REQUIREMENTS_FILE, "--user"], 
                                       capture_output=True, text=True, check=True, cwd=target_app)
             print("✅ Requirements installed successfully")
             if result.stdout:
                 print(f"   {result.stdout.strip()}")
         except subprocess.CalledProcessError as e:
-            print(f"❌ Error installing requirements: {e}")
+            print(f"⚠️  Error installing requirements: {e}")
             if e.stderr:
                 print(f"   {e.stderr.strip()}")
-            raise
+            
+            # Try alternative installation method
+            if "No module named pip" in str(e) or "No module named pip" in (e.stderr or ""):
+                print("   Attempting to bootstrap pip...")
+                try:
+                    # Try to bootstrap pip using ensurepip
+                    subprocess.run([python_to_use, "-m", "ensurepip", "--upgrade"], 
+                                 capture_output=True, text=True, check=True)
+                    print("   Pip bootstrapped successfully, retrying requirements installation...")
+                    
+                    # Retry installation
+                    if use_venv:
+                        result = subprocess.run(pip_cmd_base + ["install", "-r", REQUIREMENTS_FILE], 
+                                              capture_output=True, text=True, check=True, cwd=target_app)
+                    else:
+                        result = subprocess.run(pip_cmd_base + ["install", "-r", REQUIREMENTS_FILE, "--user"], 
+                                              capture_output=True, text=True, check=True, cwd=target_app)
+                    print("✅ Requirements installed successfully after pip bootstrap")
+                except subprocess.CalledProcessError as bootstrap_e:
+                    print(f"⚠️  Pip bootstrap failed: {bootstrap_e}")
+                    print("   Continuing without requirements installation...")
+            else:
+                print("   Continuing without requirements installation...")
     else:
         if not INSTALL_REQUIREMENTS:
             print("ℹ️  Requirements installation disabled in configuration")
