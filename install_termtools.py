@@ -86,7 +86,8 @@ REQUIREMENTS_FILE = "requirements.txt"      # Requirements file name
 
 # Virtual Environment Configuration
 VENV_FOLDER_NAME = ".venv"                  # Virtual environment folder name
-USE_VENV_COPIES = True                      # Use --copies flag for venv creation
+USE_VENV_COPIES = False                     # Use --copies flag for venv creation (disabled to avoid permission issues)
+VENV_IN_APPDATA = True                      # Create venv in AppData to avoid Program Files permission issues
 
 # Context Menu Configuration
 CONTEXT_MENU_DISPLAY_TEXT = "Run TermTools"  # Text shown in right-click menu
@@ -96,6 +97,10 @@ REGISTRY_KEY_PATH = r"Software\Classes\Directory\Background\shell\TermTools"
 AUTO_UPGRADE_PIP = True                     # Upgrade pip in virtual environment
 INSTALL_REQUIREMENTS = True                 # Install from requirements.txt if present
 CLEANUP_ON_ERROR = True                     # Clean up temp files on error
+
+# IMPORTANT NOTE: VENV_IN_APPDATA=True helps avoid permission issues when creating
+# virtual environments in Program Files. The venv will be created in:
+# %USERPROFILE%\AppData\Local\BasusTools\TermTools\.venv
 
 # ==========================================
 # END CONFIGURATION VARIABLES
@@ -143,14 +148,24 @@ def save_installation_metadata(target_app, repo_owner, repo_name, commit_hash):
 
 
 def setup_context_menu_with_venv(target_app, venv_path):
-    """Set up Windows context menu to use virtual environment Python"""
+    """Set up Windows context menu to use virtual environment Python or system Python"""
     script_path = os.path.join(target_app, MAIN_SCRIPT_NAME)
-    venv_python = os.path.join(venv_path, "Scripts", "pythonw.exe")
+    
+    # Determine which Python executable to use
+    if venv_path is not None:
+        python_exe = os.path.join(venv_path, "Scripts", "pythonw.exe")
+        print(f"   Using virtual environment Python: {python_exe}")
+    else:
+        # Use system Python - try to find pythonw.exe
+        python_exe = sys.executable.replace("python.exe", "pythonw.exe")
+        if not os.path.exists(python_exe):
+            python_exe = sys.executable  # Fallback to python.exe
+        print(f"   Using system Python: {python_exe}")
     
     menu_key = REGISTRY_KEY_PATH
     command_key = menu_key + r"\command"
     
-    cmd = f'"{venv_python}" "{script_path}" "%V"'
+    cmd = f'"{python_exe}" "{script_path}" "%V"'
     
     # Try to find an icon file in the installation directory
     icon_path = None
@@ -163,7 +178,7 @@ def setup_context_menu_with_venv(target_app, venv_path):
     
     # Fallback to Python executable icon if no custom icon found
     if not icon_path:
-        icon_path = venv_python
+        icon_path = python_exe
     
     with winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE) as hk:
         # create menu key and set its displayed text
@@ -224,32 +239,96 @@ try:
 
     # Create virtual environment using configuration
     print("🔧 Creating virtual environment...")
-    venv_path = os.path.join(target_app, VENV_FOLDER_NAME)
-    try:
-        venv_cmd = [python_executable, "-m", "venv", venv_path]
-        if USE_VENV_COPIES:
-            venv_cmd.append("--copies")
-        
-        result = subprocess.run(venv_cmd, capture_output=True, text=True, check=True, cwd=target_app)
-        print("✅ Virtual environment created successfully")
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Error creating virtual environment: {e}")
-        if e.stderr:
-            print(f"   {e.stderr.strip()}")
-        raise
+    
+    # Determine venv location
+    if VENV_IN_APPDATA:
+        # Create venv in AppData to avoid Program Files permission issues
+        appdata_dir = os.path.expanduser("~\\AppData\\Local\\BasusTools\\TermTools")
+        os.makedirs(appdata_dir, exist_ok=True)
+        venv_path = os.path.join(appdata_dir, VENV_FOLDER_NAME)
+        print(f"   Using AppData location for venv: {venv_path}")
+    else:
+        # Create venv in installation directory (original behavior)
+        venv_path = os.path.join(target_app, VENV_FOLDER_NAME)
+        print(f"   Using installation directory for venv: {venv_path}")
+    
+    # Try multiple approaches for venv creation
+    venv_created = False
+    
+    # First attempt: with --copies flag (current behavior)
+    if USE_VENV_COPIES and not venv_created:
+        try:
+            print("   Attempting with --copies flag...")
+            venv_cmd = [python_executable, "-m", "venv", venv_path, "--copies"]
+            result = subprocess.run(venv_cmd, capture_output=True, text=True, check=True, cwd=target_app)
+            print("✅ Virtual environment created successfully (with --copies)")
+            venv_created = True
+        except subprocess.CalledProcessError as e:
+            print(f"⚠️  First attempt failed: {e}")
+            if e.stderr:
+                print(f"   {e.stderr.strip()}")
+    
+    # Second attempt: without --copies flag
+    if not venv_created:
+        try:
+            print("   Attempting without --copies flag...")
+            venv_cmd = [python_executable, "-m", "venv", venv_path]
+            result = subprocess.run(venv_cmd, capture_output=True, text=True, check=True, cwd=target_app)
+            print("✅ Virtual environment created successfully (without --copies)")
+            venv_created = True
+        except subprocess.CalledProcessError as e:
+            print(f"⚠️  Second attempt failed: {e}")
+            if e.stderr:
+                print(f"   {e.stderr.strip()}")
+    
+    # Third attempt: with system-site-packages (fallback)
+    if not venv_created:
+        try:
+            print("   Attempting with --system-site-packages flag...")
+            venv_cmd = [python_executable, "-m", "venv", venv_path, "--system-site-packages"]
+            result = subprocess.run(venv_cmd, capture_output=True, text=True, check=True, cwd=target_app)
+            print("✅ Virtual environment created successfully (with --system-site-packages)")
+            venv_created = True
+        except subprocess.CalledProcessError as e:
+            print(f"⚠️  Third attempt failed: {e}")
+            if e.stderr:
+                print(f"   {e.stderr.strip()}")
+    
+    if not venv_created:
+        print("❌ All virtual environment creation attempts failed")
+        print("💡 TermTools can still work without a virtual environment")
+        print("   Dependencies will be installed to the system Python instead")
+        venv_path = None  # Signal that we don't have a venv
+    else:
+        print(f"✅ Virtual environment ready at: {venv_path}")
 
     # Install requirements if requirements.txt exists and enabled
     requirements_path = os.path.join(target_app, REQUIREMENTS_FILE)
     if INSTALL_REQUIREMENTS and os.path.exists(requirements_path):
         print(f"🔧 Installing requirements from {REQUIREMENTS_FILE}...")
-        venv_python = os.path.join(venv_path, "Scripts", "python.exe")
-        venv_pip = os.path.join(venv_path, "Scripts", "pip.exe")
+        
+        if venv_path is not None:
+            # Use virtual environment
+            print("   Using virtual environment Python...")
+            venv_python = os.path.join(venv_path, "Scripts", "python.exe")
+            venv_pip = os.path.join(venv_path, "Scripts", "pip.exe")
+            python_to_use = venv_python
+            pip_to_use = venv_pip
+        else:
+            # Use system Python
+            print("   Using system Python (no venv available)...")
+            python_to_use = python_executable
+            pip_to_use = python_executable  # Will use python -m pip
         
         # Upgrade pip first if enabled
         if AUTO_UPGRADE_PIP:
             try:
-                result = subprocess.run([venv_python, "-m", "pip", "install", "--upgrade", "pip"], 
-                                      capture_output=True, text=True, check=True, cwd=target_app)
+                if venv_path is not None:
+                    result = subprocess.run([python_to_use, "-m", "pip", "install", "--upgrade", "pip"], 
+                                          capture_output=True, text=True, check=True, cwd=target_app)
+                else:
+                    result = subprocess.run([python_to_use, "-m", "pip", "install", "--upgrade", "pip", "--user"], 
+                                          capture_output=True, text=True, check=True, cwd=target_app)
                 print("✅ Pip upgraded successfully")
             except subprocess.CalledProcessError as e:
                 print(f"⚠️  Warning: Could not upgrade pip: {e}")
@@ -258,8 +337,12 @@ try:
         
         # Install requirements
         try:
-            result = subprocess.run([venv_pip, "install", "-r", REQUIREMENTS_FILE], 
-                                  capture_output=True, text=True, check=True, cwd=target_app)
+            if venv_path is not None:
+                result = subprocess.run([pip_to_use, "install", "-r", REQUIREMENTS_FILE], 
+                                      capture_output=True, text=True, check=True, cwd=target_app)
+            else:
+                result = subprocess.run([python_to_use, "-m", "pip", "install", "-r", REQUIREMENTS_FILE, "--user"], 
+                                      capture_output=True, text=True, check=True, cwd=target_app)
             print("✅ Requirements installed successfully")
             if result.stdout:
                 print(f"   {result.stdout.strip()}")
@@ -290,7 +373,10 @@ try:
 
     print(f"\n🎉 {TARGET_APP_FOLDER} installation completed successfully!")
     print(f"📍 Installation location: {target_app}")
-    print(f"🐍 Virtual environment: {venv_path}")
+    if venv_path is not None:
+        print(f"🐍 Virtual environment: {venv_path}")
+    else:
+        print(f"🐍 Using system Python: {python_executable}")
     print(f"📋 Right-click context menu added - you can now run {TARGET_APP_FOLDER} from any folder")
 
 finally:
