@@ -679,7 +679,7 @@ class GitOperations:
             print(f"⚠️  Could not check repository status: {e}")
         
         # Get repository URL from user
-        print("\n📝 Step 1/3: Getting repository URL...")
+        print("\n📝 Step 1/6: Getting repository URL...")
         print("\n📋 Repository URL Format Examples:")
         print("   • HTTPS: https://github.com/username/repository.git")
         print("   • SSH:   git@github.com:username/repository.git")
@@ -705,6 +705,9 @@ class GitOperations:
         print("\n🔍 Commands that will be executed:")
         print("   git init")
         print(f"   git remote add origin {repo_url}")
+        print("   git add .")
+        print("   git commit -m \"initial upload\"")
+        print("   git push -u origin main")
         
         confirmation_message = (
             f"About to initialize Git repository:\n\n"
@@ -712,7 +715,10 @@ class GitOperations:
             f"Repository name: {repo_name}\n\n"
             f"Commands to execute:\n"
             f"1. git init\n"
-            f"2. git remote add origin {repo_url}\n\n"
+            f"2. git remote add origin {repo_url}\n"
+            f"3. git add .\n"
+            f"4. git commit -m \"initial upload\"\n"
+            f"5. git push -u origin main\n\n"
             f"Continue?"
         )
         
@@ -721,7 +727,7 @@ class GitOperations:
             return
         
         # Step 2: git init
-        print("\n🎬 Step 2/3: Initializing Git repository...")
+        print("\n🎬 Step 2/5: Initializing Git repository...")
         try:
             result = subprocess.run(
                 ['git', 'init'],
@@ -739,7 +745,7 @@ class GitOperations:
             return
         
         # Step 3: git remote add origin
-        print("\n🌐 Step 3/3: Adding remote origin...")
+        print("\n🌐 Step 3/5: Adding remote origin...")
         try:
             # First, check if origin already exists and remove it
             result = subprocess.run(
@@ -784,16 +790,242 @@ class GitOperations:
                 print(f"   {e.stderr.strip()}")
             return
         
+        # Step 4: git add .
+        print("\n📦 Step 4/5: Adding all files...")
+        try:
+            result = subprocess.run(
+                ['git', 'add', '.'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            print("✅ All files staged successfully")
+            if result.stdout:
+                print(f"   {result.stdout.strip()}")
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Error staging files: {e}")
+            if e.stderr:
+                print(f"   {e.stderr.strip()}")
+            return
+        
+        # Step 5: git commit -m "initial upload"
+        print("\n💾 Step 5/5: Creating initial commit...")
+        try:
+            result = subprocess.run(
+                ['git', 'commit', '-m', 'initial upload'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            print("✅ Initial commit created successfully")
+            if result.stdout:
+                print(f"   {result.stdout.strip()}")
+        except subprocess.CalledProcessError as e:
+            if "nothing to commit" in e.stdout:
+                print("ℹ️  Nothing to commit (working tree clean)")
+            else:
+                print(f"❌ Error creating commit: {e}")
+                if e.stderr:
+                    print(f"   {e.stderr.strip()}")
+                return
+        
+        # Step 6: git push -u origin main
+        print("\n🚀 Step 6/6: Pushing to remote repository...")
+        try:
+            result = subprocess.run(
+                ['git', 'push', '-u', 'origin', 'main'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            print("✅ Changes pushed to remote successfully!")
+            if result.stdout:
+                print(f"   {result.stdout.strip()}")
+            if result.stderr:  # Git often outputs to stderr even on success
+                print(f"   {result.stderr.strip()}")
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Error pushing to remote: {e}")
+            if e.stderr:
+                print(f"   {e.stderr.strip()}")
+            print("\n💡 Tip: Make sure the repository exists on the remote server")
+            print("   and you have the necessary permissions to push.")
+            return
+        
         print("\n" + "="*60)
-        print("🎉 Git repository initialized successfully!")
+        print("🎉 Git repository initialized and uploaded successfully!")
         print("📋 Summary:")
         print(f"   • Repository initialized in current folder")
         print(f"   • Remote 'origin' configured: {repo_url}")
         print(f"   • Repository name: {repo_name}")
+        print(f"   • All files added, committed, and pushed to remote")
+        print(f"   • Branch 'main' is now tracking 'origin/main'")
+
+    @staticmethod
+    def switch_repo(app=None):
+        """
+        Switch to a new remote repository URL.
+        
+        Args:
+            app: TermTools app instance
+        """
+        print("\n🔧 Switch Git Repository")
+        print("="*60)
+        
+        # Check if git is available
+        try:
+            subprocess.run(
+                ['git', '--version'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+        except FileNotFoundError:
+            print("❌ Git is not installed or not in PATH.")
+            return
+        except subprocess.CalledProcessError:
+            print("❌ Error checking Git installation.")
+            return
+        
+        # Check if we're in a git repository
+        try:
+            result = subprocess.run(
+                ['git', 'rev-parse', '--git-dir'],
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            if result.returncode != 0:
+                print("❌ Not a git repository. Please initialize git first.")
+                print("   Use: git init")
+                return
+        except Exception as e:
+            print(f"❌ Error checking repository status: {e}")
+            return
+        
+        # Show current remote configuration
+        print("\n📋 Current Remote Configuration:")
+        try:
+            result = subprocess.run(
+                ['git', 'remote', '-v'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            if result.stdout:
+                for line in result.stdout.strip().split('\n'):
+                    print(f"   {line}")
+            else:
+                print("   No remotes configured")
+        except subprocess.CalledProcessError as e:
+            print("   No remotes configured")
+        
+        # Get new repository URL from user
+        print("\n📝 Getting new repository URL...")
+        print("\n📋 Repository URL Format Examples:")
+        print("   • HTTPS: https://github.com/username/repository.git")
+        print("   • SSH:   git@github.com:username/repository.git")
+        print("")
+        
+        new_repo_url = GitOperations._get_repo_url_input(app)
+        
+        if not new_repo_url:
+            print("❌ Operation cancelled - no repository URL specified")
+            return
+        
+        # Extract repository name from URL for display
+        repo_name = new_repo_url
+        if new_repo_url.endswith('.git'):
+            repo_name = new_repo_url.rsplit('/', 1)[-1][:-4]  # Remove .git extension
+        elif '/' in new_repo_url:
+            repo_name = new_repo_url.rsplit('/', 1)[-1]
+        
+        print(f"📂 New repository URL: {new_repo_url}")
+        print(f"📦 Repository name: {repo_name}")
+        
+        # Show the exact command that will be executed
+        git_command = f"git remote set-url origin {new_repo_url}"
+        print("\n🔍 Command that will be executed:")
+        print(f"   {git_command}")
+        
+        # Get confirmation
+        confirmation_message = (
+            f"About to switch to new repository:\n\n"
+            f"New repository URL: {new_repo_url}\n"
+            f"Repository name: {repo_name}\n\n"
+            f"Command to execute:\n"
+            f"{git_command}\n\n"
+            f"⚠️  This will change the remote 'origin' URL.\n"
+            f"Continue?"
+        )
+        
+        if not GitOperations._get_confirmation(confirmation_message, "Confirm Repository Switch", app):
+            print("❌ Operation cancelled by user")
+            return
+        
+        # Execute git remote set-url origin
+        print("\n🌐 Switching to new repository...")
+        try:
+            result = subprocess.run(
+                ['git', 'remote', 'set-url', 'origin', new_repo_url],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            print("✅ Remote repository URL updated successfully")
+            
+            # Verify the new remote configuration
+            result = subprocess.run(
+                ['git', 'remote', '-v'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            if result.stdout:
+                print("\n📋 Updated Remote Configuration:")
+                for line in result.stdout.strip().split('\n'):
+                    print(f"   {line}")
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Error updating remote URL: {e}")
+            if e.stderr:
+                print(f"   {e.stderr.strip()}")
+            print("\n💡 Tip: Make sure the remote 'origin' exists.")
+            print("   You can add it with: git remote add origin <url>")
+            return
+        
+        # Push to the new remote repository with tracking
+        print("\n📤 Pushing to new repository...")
+        try:
+            result = subprocess.run(
+                ['git', 'push', '-u', 'origin', 'main'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            print("✅ Successfully pushed to new repository")
+            if result.stdout:
+                print(f"   {result.stdout.strip()}")
+            if result.stderr:
+                # Git push outputs to stderr even on success
+                print(f"   {result.stderr.strip()}")
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Error pushing to new repository: {e}")
+            if e.stderr:
+                print(f"   {e.stderr.strip()}")
+            print("\n💡 Tip: You may need to:")
+            print("   • Ensure the remote repository exists and is accessible")
+            print("   • Check your authentication credentials")
+            print("   • Manually push later with: git push -u origin main")
+            # Don't return here - we still want to show the summary
+        
+        print("\n" + "="*60)
+        print("🎉 Repository switched successfully!")
+        print("📋 Summary:")
+        print(f"   • Remote 'origin' now points to: {new_repo_url}")
+        print(f"   • Repository name: {repo_name}")
+        print(f"   • Code pushed to new repository with tracking")
         print("\n💡 Next steps:")
-        print("   • Add files: git add .")
-        print("   • Create first commit: git commit -m \"Initial commit\"")
-        print("   • Push to remote: git push -u origin main")
+        print("   • Verify connection: git fetch origin")
+        print("   • Pull latest changes: git pull origin main")
 
 
 # Register menu items using the blueprint route decorator
@@ -822,11 +1054,23 @@ def git_quick_commit_push(app=None):
 
 
 @git_operations_bp.route(
+    "1.2",
+    "Switch Repository",
+    "Change remote repository URL",
+    "🔧 GIT OPERATIONS",
+    order=3
+)
+def git_switch_repo(app=None):
+    """Menu handler for switching repository"""
+    GitOperations.switch_repo(app)
+
+
+@git_operations_bp.route(
     "1.5", 
     "Untrack, Commit & Push",
     "Remove files/folders from Git tracking",
     "🔧 GIT OPERATIONS",
-    order=3
+    order=4
 )
 def git_untrack_commit_push(app=None):
     """Menu handler for untrack, commit and push"""

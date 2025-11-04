@@ -13,7 +13,17 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import threading
 import time
+import os
 from ..blueprint import Blueprint
+
+# Import platform-specific sound module
+if os.name == 'nt':  # Windows
+    import winsound
+else:  # Unix/Linux/Mac
+    try:
+        import subprocess
+    except ImportError:
+        pass
 
 # Create the blueprint for pomodoro timer
 pomodoro_bp = Blueprint("pomodoro", "Pomodoro timer for productivity management")
@@ -131,6 +141,58 @@ class PomodoroStats:
             "last_updated": datetime.now().isoformat()
         }
         self._save_stats(default_stats)
+
+
+class SoundNotifier:
+    """Handle sound notifications for timer events"""
+    
+    @staticmethod
+    def play_completion_sound(session_type="work"):
+        """
+        Play a completion sound notification
+        
+        Args:
+            session_type: "work" or "break" to determine sound pattern
+        """
+        try:
+            if os.name == 'nt':  # Windows
+                # Play different patterns for work vs break completion
+                if session_type == "work":
+                    # Work complete: Triumphant ascending melody (5 notes)
+                    # Longer duration for more noticeable alert
+                    frequencies = [523, 659, 784, 988, 1175]  # C, E, G, B, D (major scale pattern)
+                    for freq in frequencies:
+                        winsound.Beep(freq, 250)  # frequency, duration in ms
+                        time.sleep(0.05)
+                    # Final triumphant chord-like effect
+                    winsound.Beep(1319, 500)  # High E, longer duration
+                else:
+                    # Break complete: Gentle chime pattern (3 notes)
+                    # Calming descending tones
+                    frequencies = [880, 698, 523]  # A, F, C (relaxing pattern)
+                    for freq in frequencies:
+                        winsound.Beep(freq, 350)
+                        time.sleep(0.1)
+            else:
+                # Unix/Linux/Mac: Use system bell multiple times
+                bell_count = 5 if session_type == "work" else 3
+                for _ in range(bell_count):
+                    wx.Bell()
+                    time.sleep(0.2)
+                    
+        except Exception as e:
+            # Fallback to wx.Bell if sound fails
+            print(f"⚠️ Sound notification failed: {e}")
+            wx.Bell()
+    
+    @staticmethod
+    def play_tick_sound():
+        """Play a subtle tick sound (for last minute countdown if needed)"""
+        try:
+            if os.name == 'nt':
+                winsound.Beep(600, 100)  # Short, low beep
+        except Exception:
+            pass  # Silent failure for tick sounds
 
 
 class PomodoroTimer(wx.Frame):
@@ -712,8 +774,12 @@ class PomodoroTimer(wx.Frame):
             # Record work session in stats
             self.stats_manager.record_work_session(self.work_minutes)
             
-            # Play notification
-            wx.Bell()
+            # Play completion sound for work session (in separate thread to not block UI)
+            threading.Thread(
+                target=SoundNotifier.play_completion_sound,
+                args=("work",),
+                daemon=True
+            ).start()
             
             # Show notification
             wx.MessageBox(
@@ -725,8 +791,12 @@ class PomodoroTimer(wx.Frame):
             # Record break session in stats
             self.stats_manager.record_break_session(self.break_minutes)
             
-            # Play notification
-            wx.Bell()
+            # Play completion sound for break session (in separate thread to not block UI)
+            threading.Thread(
+                target=SoundNotifier.play_completion_sound,
+                args=("break",),
+                daemon=True
+            ).start()
             
             # Show notification
             wx.MessageBox(

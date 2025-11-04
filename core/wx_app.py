@@ -209,7 +209,7 @@ class TermToolsFrame(wx.Frame):
     def __init__(self):
         super().__init__(
             None, 
-            title="TermTools - Python Project Manager v2.9 GUI",
+            title="TermTools - Python Project Manager v2.10 GUI",
             size=(1000, 700)
         )
         
@@ -398,13 +398,18 @@ class TermToolsFrame(wx.Frame):
         dir_label.SetBackgroundColour(DarkTheme.PANEL_BG)
         status_sizer.Add(dir_label, 0, wx.ALIGN_CENTER | wx.TOP, 5)
         
-        # Git repository status (dynamic)
+        # Git repository status (dynamic, clickable)
         self.git_repo_label = wx.StaticText(status_panel, label="")
         git_repo_font = wx.Font(9, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
         self.git_repo_label.SetFont(git_repo_font)
         self.git_repo_label.SetForegroundColour(DarkTheme.CATEGORY_GIT)
         self.git_repo_label.SetBackgroundColour(DarkTheme.PANEL_BG)
+        self.git_repo_label.SetCursor(wx.Cursor(wx.CURSOR_HAND))  # Show hand cursor
+        self.git_repo_label.Bind(wx.EVT_LEFT_UP, self._on_git_repo_click)
         status_sizer.Add(self.git_repo_label, 0, wx.ALIGN_CENTER | wx.TOP, 3)
+        
+        # Store the remote URL for copying
+        self.git_remote_url = None
         
         # Git last commit status (dynamic)
         self.git_commit_label = wx.StaticText(status_panel, label="")
@@ -832,8 +837,9 @@ class TermToolsFrame(wx.Frame):
             )
             
             if result.returncode == 0:
-                # Get repository name from remote URL
+                # Get repository name and URL from remote
                 repo_name = "Unknown"
+                remote_url = None
                 try:
                     remote_result = subprocess.run(
                         ['git', 'remote', 'get-url', 'origin'],
@@ -846,16 +852,22 @@ class TermToolsFrame(wx.Frame):
                         remote_url = remote_result.stdout.strip()
                         # Extract repo name from URL (e.g., https://github.com/user/repo.git -> repo)
                         if remote_url:
-                            # Remove .git extension if present
-                            if remote_url.endswith('.git'):
-                                remote_url = remote_url[:-4]
-                            # Extract last part of path
-                            repo_name = remote_url.split('/')[-1]
+                            # Remove .git extension for display name
+                            display_url = remote_url[:-4] if remote_url.endswith('.git') else remote_url
+                            # Extract last part of path as repo name
+                            repo_name = display_url.split('/')[-1]
                 except Exception:
                     # If remote doesn't exist, try to get from directory name
                     repo_name = os.path.basename(self.current_dir)
                 
-                self.git_repo_label.SetLabel(f"🔗 Git Repository: {repo_name}")
+                # Store remote URL for copy functionality
+                self.git_remote_url = remote_url
+                
+                # Display repo name with full URL (with click hint)
+                if remote_url:
+                    self.git_repo_label.SetLabel(f"🔗 Git Repository: {repo_name} ({remote_url}) [copy]")
+                else:
+                    self.git_repo_label.SetLabel(f"🔗 Git Repository: {repo_name}")
                 self.git_repo_label.Show()
                 
                 # Get last commit date and time
@@ -879,10 +891,12 @@ class TermToolsFrame(wx.Frame):
                     self.git_commit_label.Show()
             else:
                 # Not a git repository
+                self.git_remote_url = None
                 self.git_repo_label.Hide()
                 self.git_commit_label.Hide()
         except Exception as e:
             # Hide git status if git is not available or any error occurs
+            self.git_remote_url = None
             self.git_repo_label.Hide()
             self.git_commit_label.Hide()
     
@@ -966,6 +980,28 @@ class TermToolsFrame(wx.Frame):
         current_datetime = datetime.now().strftime("%B %d, %Y %I:%M:%S %p")
         if hasattr(self, 'status_title_label'):
             self.status_title_label.SetLabel(f"STATUS ON {current_datetime}")
+    
+    def _on_git_repo_click(self, event):
+        """Handle click on git repository label - copy URL to clipboard"""
+        if hasattr(self, 'git_remote_url') and self.git_remote_url:
+            try:
+                # Copy to clipboard
+                if wx.TheClipboard.Open():
+                    wx.TheClipboard.SetData(wx.TextDataObject(self.git_remote_url))
+                    wx.TheClipboard.Close()
+                    
+                    # Show a temporary notification
+                    wx.MessageBox(
+                        f"✅ GitHub URL copied to clipboard!\n\n{self.git_remote_url}",
+                        "URL Copied",
+                        wx.OK | wx.ICON_INFORMATION
+                    )
+            except Exception as e:
+                wx.MessageBox(
+                    f"❌ Failed to copy URL to clipboard: {e}",
+                    "Copy Failed",
+                    wx.OK | wx.ICON_ERROR
+                )
     
     def on_clear_output(self, event):
         """Clear the output console"""
