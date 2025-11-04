@@ -955,46 +955,32 @@ class TermToolsFrame(wx.Frame):
             # Silently handle errors to avoid disrupting the UI
             pass
     
-    def _is_dev_mode(self):
-        """
-        Check if running in development mode by reading installation_info.json
-        
-        Returns:
-            bool: True if dev_mode flag is set to true, False otherwise
-        """
-        try:
-            import json
-            from pathlib import Path
-            
-            # Always check local installation_info.json (in dev directory)
-            current_script_dir = Path(__file__).resolve().parent.parent  # Go up from core/ to TermTools root
-            info_file = current_script_dir / "core" / "data" / "installation_info.json"
-            
-            if info_file.exists():
-                with open(info_file, 'r') as f:
-                    data = json.load(f)
-                    return data.get("dev_mode", False)
-            
-            # If file doesn't exist, default to False (production mode)
-            return False
-            
-        except Exception as e:
-            # On any error, default to False (production mode)
-            print(f"⚠️ Warning: Could not read dev_mode from installation_info.json: {e}")
-            return False
-    
     def _setup_logging(self):
         """Setup logging to file"""
         from datetime import datetime
         from pathlib import Path
+        import json
         
-        # Determine if running in dev mode from installation_info.json
+        # Determine if running in dev mode by reading installation_info.json
         current_script_dir = Path(__file__).resolve().parent.parent  # Go up from core/ to TermTools root
-        is_dev_mode = self._is_dev_mode()
+        installation_info_path = current_script_dir / "core" / "data" / "installation_info.json"
+        
+        is_dev_mode = True  # Default to dev mode
+        
+        # Try to read dev_mode flag from installation_info.json
+        try:
+            if installation_info_path.exists():
+                with open(installation_info_path, 'r') as f:
+                    installation_info = json.load(f)
+                    is_dev_mode = installation_info.get("dev_mode", True)
+        except Exception as e:
+            # If we can't read the file, default to dev mode
+            print(f"⚠️  Warning: Could not read installation_info.json: {e}")
+            print(f"   Defaulting to dev mode")
         
         if is_dev_mode:
-            # Development mode: logs go to local directory
-            log_dir = current_script_dir / "core" / "data" / "logs"
+            # Development mode: logs go to current directory (where TermTools was clicked)
+            log_dir = Path(os.getcwd()) / "core" / "data" / "logs"
         else:
             # Production mode: logs go to Program Files installation directory
             log_dir = Path(r"C:\Program Files\BasusTools\TermTools\core\data\logs")
