@@ -230,7 +230,7 @@ try:
     print(f"✅ Files copied to {target_app}")
 
     # Create virtual environment using configuration
-    print("🔧 Creating virtual environment...")
+    print("🔧 Setting up virtual environment...")
     
     # Determine venv location
     if VENV_IN_APPDATA:
@@ -244,18 +244,30 @@ try:
         venv_path = os.path.join(target_app, VENV_FOLDER_NAME)
         print(f"   Using installation directory for venv: {venv_path}")
     
-    # Remove old venv if it exists (prevents permission issues during update)
-    if os.path.exists(venv_path):
-        print(f"   Removing existing venv at {venv_path}...")
-        try:
-            shutil.rmtree(venv_path, ignore_errors=True)
-            print("   ✅ Old venv removed successfully")
-        except Exception as e:
-            print(f"   ⚠️ Warning: Could not fully remove old venv: {e}")
-            print("   Attempting to continue anyway...")
+    # Check if venv already exists and is functional
+    venv_python = os.path.join(venv_path, "Scripts", "python.exe")
+    venv_exists_and_works = False
     
-    # Try multiple approaches for venv creation
-    venv_created = False
+    if os.path.exists(venv_path) and os.path.exists(venv_python):
+        print(f"   Existing venv found at {venv_path}")
+        # Test if the venv is functional
+        try:
+            test_result = subprocess.run(
+                [venv_python, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=True
+            )
+            print(f"   ✅ Existing venv is functional: {test_result.stdout.strip()}")
+            print("   Skipping venv recreation to avoid permission conflicts")
+            venv_exists_and_works = True
+        except Exception as e:
+            print(f"   ⚠️ Existing venv appears broken: {e}")
+            print("   Will attempt to recreate...")
+    
+    # Try multiple approaches for venv creation (only if needed)
+    venv_created = venv_exists_and_works
     
     # First attempt: with --copies flag (current behavior)
     if USE_VENV_COPIES and not venv_created:
@@ -312,7 +324,10 @@ try:
     # Install requirements if requirements.txt exists and enabled
     requirements_path = os.path.join(target_app, REQUIREMENTS_FILE)
     if INSTALL_REQUIREMENTS and os.path.exists(requirements_path):
-        print(f"🔧 Installing requirements from {REQUIREMENTS_FILE}...")
+        if venv_exists_and_works:
+            print(f"🔧 Updating dependencies from {REQUIREMENTS_FILE}...")
+        else:
+            print(f"🔧 Installing requirements from {REQUIREMENTS_FILE}...")
         
         # CRITICAL: Only use virtual environment (system Python fallback removed)
         print("   Using virtual environment Python...")
