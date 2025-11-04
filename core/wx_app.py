@@ -1111,25 +1111,24 @@ class TermToolsFrame(wx.Frame):
             import json
             import os
             
-            # Look for installation_info.json in the data directory
-            data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "core", "data")
-            metadata_file = os.path.join(data_dir, "installation_info.json")
+            # Check the installed location from Program Files ONLY
+            # This ensures we always check the actual installed version
+            installed_path = r"C:\Program Files\BasusTools\TermTools\core\data\installation_info.json"
             
-            if not os.path.exists(metadata_file):
-                # Try alternative path (for installed version)
-                script_dir = os.path.dirname(os.path.abspath(__file__))
-                alt_metadata_file = os.path.join(script_dir, "data", "installation_info.json")
-                if os.path.exists(alt_metadata_file):
-                    metadata_file = alt_metadata_file
-                else:
-                    return None
+            if not os.path.exists(installed_path):
+                print(f"❌ Installation info not found at: {installed_path}")
+                print("💡 TermTools must be installed via the installer to use update checks.")
+                return None
             
-            with open(metadata_file, 'r') as f:
+            with open(installed_path, 'r') as f:
                 metadata = json.load(f)
-                return metadata.get("remote_commit_hash")
+                commit_hash = metadata.get("remote_commit_hash")
+                if not commit_hash:
+                    print("⚠️ Installation info exists but contains no commit hash.")
+                return commit_hash
                 
         except Exception as e:
-            print(f"Warning: Could not read local installation info: {e}")
+            print(f"❌ Error reading local installation info: {e}")
             return None
     
     def _get_remote_repository_hash(self):
