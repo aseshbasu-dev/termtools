@@ -301,6 +301,220 @@ class GitOperations:
         print("\n" + "="*60)
         print("🎉 All operations completed successfully!")
 
+    @staticmethod
+    def _get_untrack_input(app=None):
+        """
+        Get files/folders to untrack from user via GUI dialog.
+        
+        Args:
+            app: TermTools app instance (used to detect GUI mode)
+            
+        Returns:
+            str: Space-separated files/folders or None if cancelled
+        """
+        return GitOperations._get_untrack_input_gui_threadsafe()
+    
+    @staticmethod
+    def _get_untrack_input_gui():
+        """Get files/folders to untrack via GUI dialog"""
+        try:
+            import wx
+            
+            # Create dialog for files/folders input
+            dlg = wx.TextEntryDialog(
+                None,
+                "Enter files/folders to untrack (separate with spaces):\n\nExample: .github .vscode __pycache__ temp.txt",
+                "Git Untrack Files/Folders",
+                ""  # Empty default value
+            )
+            dlg.SetSize(wx.Size(500, 180))  # Make dialog wider for better text entry
+            
+            if dlg.ShowModal() == wx.ID_OK:
+                untrack_input = dlg.GetValue().strip()
+                dlg.Destroy()
+                return untrack_input if untrack_input else None
+            else:
+                dlg.Destroy()
+                return None  # User cancelled
+        except Exception as e:
+            print(f"❌ Error showing GUI dialog: {e}")
+            return None
+    
+    @staticmethod
+    def _get_untrack_input_gui_threadsafe():
+        """Thread-safe version using wx.CallAfter for GUI operations"""
+        import wx
+        import threading
+        
+        result_container = {"value": None, "done": False}
+        
+        def show_dialog():
+            try:
+                dlg = wx.TextEntryDialog(
+                    None,
+                    "Enter files/folders to untrack (separate with spaces):\n\nExample: .github .vscode __pycache__ temp.txt",
+                    "Git Untrack Files/Folders",
+                    ""  # Empty default value
+                )
+                dlg.SetSize(wx.Size(500, 180))
+                
+                if dlg.ShowModal() == wx.ID_OK:
+                    untrack_input = dlg.GetValue().strip()
+                    result_container["value"] = untrack_input if untrack_input else None
+                else:
+                    result_container["value"] = None  # User cancelled
+                dlg.Destroy()
+            except Exception as e:
+                print(f"❌ Error showing GUI dialog: {e}")
+                result_container["value"] = None
+            finally:
+                result_container["done"] = True
+        
+        # Check if we're on the main thread using threading
+        try:
+            main_thread = threading.main_thread()
+            current_thread = threading.current_thread()
+            
+            if current_thread == main_thread:
+                return GitOperations._get_untrack_input_gui()
+            else:
+                # Use CallAfter to execute on main thread
+                wx.CallAfter(show_dialog)
+                
+                # Wait for dialog to complete
+                while not result_container["done"]:
+                    threading.Event().wait(0.1)
+                
+                return result_container["value"]
+        except:
+            # Fallback if wx not available or other issues
+            return GitOperations._get_untrack_input_gui()
+
+    @staticmethod
+    def untrack_commit_push(app=None):
+        """
+        Untrack files/folders, commit, and push to remote repository.
+        This removes files from Git tracking without deleting them from the filesystem.
+        
+        Args:
+            app: TermTools app instance
+        """
+        print("🔧 Git Untrack, Commit & Push Operation")
+        print("="*60)
+        print("💡 This will remove files/folders from Git tracking without deleting them from disk")
+        print("   Files will remain on your filesystem but won't be tracked by Git anymore")
+        print("")
+        
+        # Step 1: Get files/folders to untrack
+        print("📝 Step 1/4: Getting files/folders to untrack...")
+        untrack_input = GitOperations._get_untrack_input(app)
+        
+        if not untrack_input:
+            print("❌ Operation cancelled - no files/folders specified")
+            return
+        
+        # Parse the input into a list of files/folders
+        files_to_untrack = untrack_input.split()
+        
+        if not files_to_untrack:
+            print("❌ Operation cancelled - no files/folders specified")
+            return
+        
+        print(f"📂 Files/folders to untrack: {', '.join(files_to_untrack)}")
+        
+        # Show confirmation with exact commands
+        print("\n🔍 Commands that will be executed:")
+        git_rm_command = ['git', 'rm', '-r', '--cached'] + files_to_untrack
+        print(f"   {' '.join(git_rm_command)}")
+        commit_message = f"Remove {' '.join(files_to_untrack)} from tracking"
+        print(f"   git commit -m \"{commit_message}\"")
+        print(f"   git push origin main")
+        
+        # Get confirmation
+        confirmation_message = (
+            f"⚠️  About to untrack: {', '.join(files_to_untrack)}\n\n"
+            f"Commands to execute:\n"
+            f"• {' '.join(git_rm_command)}\n"
+            f"• git commit -m \"{commit_message}\"\n"
+            f"• git push origin main\n\n"
+            f"Files will remain on disk but won't be tracked by Git.\n"
+            f"Continue?"
+        )
+        
+        if not GitOperations._get_confirmation(confirmation_message, "Confirm Git Untrack Operation", app):
+            print("❌ Operation cancelled by user")
+            return
+        
+        # Step 2: git rm --cached
+        print("\n🗑️  Step 2/4: Removing files from Git tracking...")
+        try:
+            result = subprocess.run(
+                git_rm_command,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            print("✅ Files removed from Git tracking successfully")
+            if result.stdout:
+                print(f"   {result.stdout.strip()}")
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Error removing files from tracking: {e}")
+            if e.stderr:
+                print(f"   {e.stderr.strip()}")
+            print("💡 Tip: Make sure the files exist and are currently tracked by Git")
+            return
+        
+        # Step 3: git commit
+        print("\n💾 Step 3/4: Committing changes...")
+        try:
+            result = subprocess.run(
+                ['git', 'commit', '-m', commit_message],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            print(f"✅ Changes committed successfully")
+            if result.stdout:
+                print(f"   {result.stdout.strip()}")
+        except subprocess.CalledProcessError as e:
+            if "nothing to commit" in e.stdout:
+                print("ℹ️  Nothing to commit (working tree clean)")
+                print("   Skipping push operation.")
+                return
+            else:
+                print(f"❌ Error committing changes: {e}")
+                if e.stderr:
+                    print(f"   {e.stderr.strip()}")
+                return
+        
+        # Step 4: git push
+        print("\n🚀 Step 4/4: Pushing to remote...")
+        try:
+            result = subprocess.run(
+                ['git', 'push', 'origin', 'main'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            print("✅ Changes pushed successfully!")
+            if result.stdout:
+                print(f"   {result.stdout.strip()}")
+            if result.stderr:  # Git often outputs to stderr even on success
+                print(f"   {result.stderr.strip()}")
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Error pushing changes: {e}")
+            if e.stderr:
+                print(f"   {e.stderr.strip()}")
+            print("\n💡 Tip: You may need to set up a remote or pull first.")
+            return
+        
+        print("\n" + "="*60)
+        print("🎉 All untrack operations completed successfully!")
+        print("📋 Summary:")
+        print(f"   • Removed from Git tracking: {', '.join(files_to_untrack)}")
+        print(f"   • Files remain on disk but are no longer tracked by Git")
+        print(f"   • Changes committed and pushed to remote repository")
+
 
 # Register menu items using the blueprint route decorator
 @git_operations_bp.route(
@@ -313,6 +527,18 @@ class GitOperations:
 def git_quick_commit_push(app=None):
     """Menu handler for quick commit and push"""
     GitOperations.quick_commit_push(app)
+
+
+@git_operations_bp.route(
+    "1.5", 
+    "Untrack, Commit & Push",
+    "Remove files/folders from Git tracking",
+    "🔧 GIT OPERATIONS",
+    order=2
+)
+def git_untrack_commit_push(app=None):
+    """Menu handler for untrack, commit and push"""
+    GitOperations.untrack_commit_push(app)
 
 
 # Initialize the module
