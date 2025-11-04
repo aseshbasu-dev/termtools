@@ -1007,24 +1007,6 @@ class TermToolsFrame(wx.Frame):
         try:
             # Import here to avoid circular imports
             import subprocess
-            import time
-            import json
-            
-            # Get the installation info path to monitor
-            program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
-            installation_info_path = os.path.join(
-                program_files, "BasusTools", "TermTools", "core", "data", "installation_info.json"
-            )
-            
-            # Get current installation hash if it exists
-            old_hash = None
-            if os.path.exists(installation_info_path):
-                try:
-                    with open(installation_info_path, 'r') as f:
-                        data = json.load(f)
-                        old_hash = data.get("remote_commit_hash")
-                except:
-                    pass
             
             # The PowerShell command for updating
             command = (
@@ -1048,19 +1030,13 @@ class TermToolsFrame(wx.Frame):
             
             wx.CallAfter(self._append_output, "✅ Update process initiated successfully!\n")
             wx.CallAfter(self._append_output, "💡 The installer will run with administrator privileges.\n")
-            wx.CallAfter(self._append_output, "🔄 Monitoring installation progress...\n")
+            wx.CallAfter(self._append_output, "🔄 TermTools will restart automatically if the update completes.\n")
             
             # Show any output from the command
             if result.stdout:
                 wx.CallAfter(self._append_output, f"Output: {result.stdout.strip()}\n")
             if result.stderr:
                 wx.CallAfter(self._append_output, f"Warnings: {result.stderr.strip()}\n")
-            
-            # Start monitoring for installation completion in a separate thread
-            monitor_thread = threading.Thread(target=self._monitor_installation_and_restart, 
-                                             args=(installation_info_path, old_hash))
-            monitor_thread.daemon = True
-            monitor_thread.start()
                 
         except subprocess.CalledProcessError as e:
             wx.CallAfter(self._append_output, f"❌ Update failed to initiate: {e}\n")
@@ -1071,91 +1047,6 @@ class TermToolsFrame(wx.Frame):
             wx.CallAfter(self._append_output, "❌ PowerShell not found. This feature requires Windows PowerShell.\n")
         except Exception as e:
             wx.CallAfter(self._append_output, f"❌ Unexpected error during update: {e}\n")
-    
-    def _monitor_installation_and_restart(self, installation_info_path, old_hash):
-        """Monitor the installation file for changes and restart when complete"""
-        import time
-        import json
-        import subprocess
-        
-        max_wait_time = 300  # 5 minutes max wait
-        check_interval = 2   # Check every 2 seconds
-        elapsed = 0
-        
-        wx.CallAfter(self._append_output, "⏱️ Waiting for installation to complete (max 5 minutes)...\n")
-        
-        while elapsed < max_wait_time:
-            time.sleep(check_interval)
-            elapsed += check_interval
-            
-            # Check if installation_info.json has been updated
-            if os.path.exists(installation_info_path):
-                try:
-                    with open(installation_info_path, 'r') as f:
-                        data = json.load(f)
-                        new_hash = data.get("remote_commit_hash")
-                        
-                        # Check if hash changed (indicating successful installation)
-                        if new_hash and new_hash != old_hash:
-                            wx.CallAfter(self._append_output, f"✅ Installation completed successfully!\n")
-                            wx.CallAfter(self._append_output, f"🔄 Restarting TermTools with new version...\n")
-                            
-                            # Give user a moment to see the message
-                            time.sleep(1)
-                            
-                            # Get the path to the installed TermTools
-                            program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
-                            termtools_script = os.path.join(
-                                program_files, "BasusTools", "TermTools", "TermTools.py"
-                            )
-                            
-                            # Get the venv Python path
-                            appdata_dir = os.path.expanduser(r"~\AppData\Local\BasusTools\TermTools")
-                            venv_python = os.path.join(appdata_dir, ".venv", "Scripts", "pythonw.exe")
-                            
-                            # Fallback to old location if not in AppData
-                            if not os.path.exists(venv_python):
-                                venv_python = os.path.join(
-                                    program_files, "BasusTools", "TermTools", ".venv", "Scripts", "pythonw.exe"
-                                )
-                            
-                            # Start the new instance
-                            if os.path.exists(venv_python) and os.path.exists(termtools_script):
-                                # Get current working directory to pass to new instance
-                                cwd = os.getcwd()
-                                
-                                # Start new instance in background
-                                subprocess.Popen(
-                                    [venv_python, termtools_script, cwd],
-                                    cwd=cwd,
-                                    creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-                                )
-                                
-                                wx.CallAfter(self._append_output, "✅ New TermTools instance started!\n")
-                                wx.CallAfter(self._append_output, "👋 Closing this window in 2 seconds...\n")
-                                time.sleep(2)
-                                
-                                # Close this instance
-                                wx.CallAfter(self.Close, True)
-                            else:
-                                wx.CallAfter(self._append_output, 
-                                           f"⚠️ Installation complete, but could not auto-restart.\n"
-                                           f"   Please manually launch TermTools from the context menu.\n")
-                            return
-                            
-                except Exception as e:
-                    # Ignore file read errors during installation
-                    pass
-            
-            # Show progress every 10 seconds
-            if elapsed % 10 == 0:
-                wx.CallAfter(self._append_output, f"   Still waiting... ({elapsed}s elapsed)\n")
-        
-        # Timeout reached
-        wx.CallAfter(self._append_output, 
-                   f"⏱️ Installation monitoring timeout reached.\n"
-                   f"   The installation may still be in progress.\n"
-                   f"   Please check the installer window and restart TermTools manually if needed.\n")
     
     def _on_check_for_updates(self, update_panel):
         """Handle the check for updates button click"""
