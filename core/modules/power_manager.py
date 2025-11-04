@@ -15,6 +15,13 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from ..blueprint import Blueprint
 
+def _get_subprocess_flags():
+    """Get subprocess creation flags to prevent console window flashing on Windows"""
+    if os.name == 'nt':
+        return {'creationflags': subprocess.CREATE_NO_WINDOW}
+    return {}
+
+
 # Create the blueprint for power management
 power_manager_bp = Blueprint("power_manager", "System power management and shutdown scheduling")
 
@@ -209,11 +216,11 @@ class SystemPowerManager:
             
             if os.name == 'nt':  # Windows
                 # Use Windows shutdown command
-                subprocess.run(['shutdown', '/s', '/t', str(minutes * 60)], check=True)
+                subprocess.run(['shutdown', '/s', '/t', str(minutes * 60)], check=True, **_get_subprocess_flags())
                 success_message = f"✅ Shutdown scheduled successfully!\n🕒 System will shutdown in {description}\n💡 Use 'shutdown /a' in command prompt to cancel"
                 self._show_gui_info(success_message, "Shutdown Scheduled")
             else:  # Unix-like systems
-                subprocess.run(['sudo', 'shutdown', '-h', f"+{minutes}"], check=True)
+                subprocess.run(['sudo', 'shutdown', '-h', f"+{minutes}"], check=True, **_get_subprocess_flags())
                 success_message = f"✅ Shutdown scheduled successfully!\n🕒 System will shutdown in {description}\n💡 Use 'sudo shutdown -c' to cancel"
                 self._show_gui_info(success_message, "Shutdown Scheduled")
                 
@@ -283,13 +290,13 @@ class SystemPowerManager:
         """Cancel any scheduled shutdown"""
         try:
             if os.name == 'nt':  # Windows
-                result = subprocess.run(['shutdown', '/a'], capture_output=True, text=True)
+                result = subprocess.run(['shutdown', '/a'], capture_output=True, text=True, **_get_subprocess_flags())
                 if result.returncode == 0:
                     self._show_gui_info("Shutdown cancelled successfully!", "Shutdown Cancelled")
                 else:
                     self._show_gui_info("No shutdown was scheduled or shutdown already cancelled.", "No Shutdown Found")
             else:  # Unix-like systems
-                result = subprocess.run(['sudo', 'shutdown', '-c'], capture_output=True, text=True)
+                result = subprocess.run(['sudo', 'shutdown', '-c'], capture_output=True, text=True, **_get_subprocess_flags())
                 if result.returncode == 0:
                     self._show_gui_info("Shutdown cancelled successfully!", "Shutdown Cancelled")
                 else:
@@ -309,7 +316,7 @@ class SystemPowerManager:
         try:
             if os.name == 'nt':  # Windows
                 # Check if shutdown is scheduled by trying to cancel it (won't actually cancel)
-                result = subprocess.run(['shutdown', '/a'], capture_output=True, text=True)
+                result = subprocess.run(['shutdown', '/a'], capture_output=True, text=True, **_get_subprocess_flags())
                 if "No logoff or shutdown in progress" in result.stderr:
                     print("ℹ️  No shutdown is currently scheduled.")
                 else:
@@ -317,7 +324,7 @@ class SystemPowerManager:
                     print("💡 Use option 5 to cancel if needed.")
             else:  # Unix-like systems
                 # Check for scheduled shutdown
-                result = subprocess.run(['who', '-b'], capture_output=True, text=True)
+                result = subprocess.run(['who', '-b'], capture_output=True, text=True, **_get_subprocess_flags())
                 print("ℹ️  System shutdown status:")
                 print("💡 Use 'sudo shutdown -c' to cancel any scheduled shutdown")
                 

@@ -13,6 +13,13 @@ import subprocess
 from pathlib import Path
 from ..blueprint import Blueprint
 
+def _get_subprocess_flags():
+    """Get subprocess creation flags to prevent console window flashing on Windows"""
+    if os.name == 'nt':
+        return {'creationflags': subprocess.CREATE_NO_WINDOW}
+    return {}
+
+
 # Import wx for GUI confirmations
 try:
     import wx
@@ -819,9 +826,9 @@ Specify the license for your project.
         print("\n[3/4] 📝 Opening VS Code...")
         try:
             if os.name == 'nt':  # Windows
-                subprocess.Popen(['code', '.'], shell=True)
+                subprocess.Popen(['code', '.'], shell=True, **_get_subprocess_flags())
             else:  # Unix-like systems
-                subprocess.Popen(['code', '.'])
+                subprocess.Popen(['code', '.'], **_get_subprocess_flags())
             print("✅ VS Code opened successfully.")
         except Exception as e:
             print(f"⚠️  Could not open VS Code automatically: {e}")
@@ -842,7 +849,7 @@ Specify the license for your project.
                 
                 print("📥 Installing requirements...")
                 result = subprocess.run([str(pip_path), 'install', '-r', 'requirements.txt'], 
-                                      capture_output=True, text=True)
+                                      capture_output=True, text=True, **_get_subprocess_flags())
                 
                 if result.returncode == 0:
                     print("✅ Requirements installed successfully.")

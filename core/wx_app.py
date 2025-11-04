@@ -18,6 +18,18 @@ from typing import Dict, List
 from .app import TermTools
 
 
+def get_subprocess_creation_flags():
+    """
+    Get appropriate subprocess creation flags to prevent console windows on Windows.
+    
+    Returns:
+        dict: Dictionary with 'creationflags' key for Windows, empty dict otherwise
+    """
+    if os.name == 'nt':  # Windows
+        return {'creationflags': subprocess.CREATE_NO_WINDOW}
+    return {}
+
+
 class DarkTheme:
     """Professional dark theme color palette for TermTools GUI"""
     
@@ -658,12 +670,12 @@ class TermToolsFrame(wx.Frame):
                     scheduled_time = datetime.now() + timedelta(minutes=minutes)
                     
                     if os.name == 'nt':  # Windows
-                        subprocess.run(['shutdown', '/s', '/t', str(minutes * 60)], check=True)
+                        subprocess.run(['shutdown', '/s', '/t', str(minutes * 60)], check=True, **get_subprocess_creation_flags())
                         print(f"✅ Shutdown scheduled successfully!")
                         print(f"🕒 System will shutdown in {description}")
                         print(f"💡 Use 'shutdown /a' in command prompt to cancel")
                     else:  # Unix-like systems
-                        subprocess.run(['sudo', 'shutdown', '-h', f"+{minutes}"], check=True)
+                        subprocess.run(['sudo', 'shutdown', '-h', f"+{minutes}"], check=True, **get_subprocess_creation_flags())
                         print(f"✅ Shutdown scheduled successfully!")
                         print(f"🕒 System will shutdown in {description}")
                         print(f"💡 Use 'sudo shutdown -c' to cancel")
@@ -761,13 +773,13 @@ class TermToolsFrame(wx.Frame):
                     import os
                     
                     if os.name == 'nt':  # Windows
-                        result = subprocess.run(['shutdown', '/a'], capture_output=True, text=True)
+                        result = subprocess.run(['shutdown', '/a'], capture_output=True, text=True, **get_subprocess_creation_flags())
                         if result.returncode == 0:
                             print("✅ Shutdown cancelled successfully!")
                         else:
                             print("ℹ️  No shutdown was scheduled or shutdown already cancelled.")
                     else:  # Unix-like systems
-                        result = subprocess.run(['sudo', 'shutdown', '-c'], capture_output=True, text=True)
+                        result = subprocess.run(['sudo', 'shutdown', '-c'], capture_output=True, text=True, **get_subprocess_creation_flags())
                         if result.returncode == 0:
                             print("✅ Shutdown cancelled successfully!")
                         else:
@@ -833,7 +845,8 @@ class TermToolsFrame(wx.Frame):
                 ['git', 'rev-parse', '--is-inside-work-tree'],
                 capture_output=True,
                 text=True,
-                cwd=self.current_dir
+                cwd=self.current_dir,
+                **get_subprocess_creation_flags()
             )
             
             if result.returncode == 0:
@@ -846,7 +859,8 @@ class TermToolsFrame(wx.Frame):
                         capture_output=True,
                         text=True,
                         cwd=self.current_dir,
-                        check=False
+                        check=False,
+                        **get_subprocess_creation_flags()
                     )
                     if remote_result.returncode == 0:
                         remote_url = remote_result.stdout.strip()
@@ -877,7 +891,8 @@ class TermToolsFrame(wx.Frame):
                         capture_output=True,
                         text=True,
                         cwd=self.current_dir,
-                        check=False
+                        check=False,
+                        **get_subprocess_creation_flags()
                     )
                     if commit_result.returncode == 0:
                         last_commit = commit_result.stdout.strip()
@@ -1148,7 +1163,8 @@ class TermToolsFrame(wx.Frame):
                 ["powershell", "-Command", command],
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
+                **get_subprocess_creation_flags()
             )
             
             wx.CallAfter(self._append_output, "✅ Update process initiated successfully!\n")

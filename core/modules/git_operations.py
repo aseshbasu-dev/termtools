@@ -8,7 +8,15 @@ quick commit and push operations.
 
 import subprocess
 import sys
+import os
 from ..blueprint import Blueprint
+
+
+def _get_subprocess_flags():
+    """Get subprocess creation flags to prevent console window flashing on Windows"""
+    if os.name == 'nt':
+        return {'creationflags': subprocess.CREATE_NO_WINDOW}
+    return {}
 
 # Create the blueprint for Git operations
 git_operations_bp = Blueprint("git_operations", "Git repository management")
@@ -206,7 +214,7 @@ class GitOperations:
                 capture_output=True,
                 text=True,
                 check=False
-            )
+            , **_get_subprocess_flags())
             if result.returncode != 0:
                 print("❌ Not a git repository. Please initialize git first.")
                 print("   Use: git init")
@@ -246,7 +254,7 @@ class GitOperations:
                 capture_output=True,
                 text=True,
                 check=True
-            )
+            , **_get_subprocess_flags())
             print("✅ All changes staged successfully")
         except subprocess.CalledProcessError as e:
             print(f"❌ Error staging changes: {e}")
@@ -262,7 +270,7 @@ class GitOperations:
                 capture_output=True,
                 text=True,
                 check=True
-            )
+            , **_get_subprocess_flags())
             print(f"✅ Changes committed successfully")
             if result.stdout:
                 print(f"   {result.stdout.strip()}")
@@ -285,7 +293,7 @@ class GitOperations:
                 capture_output=True,
                 text=True,
                 check=True
-            )
+            , **_get_subprocess_flags())
             print("✅ Changes pushed successfully!")
             if result.stdout:
                 print(f"   {result.stdout.strip()}")
@@ -558,7 +566,7 @@ class GitOperations:
                 capture_output=True,
                 text=True,
                 check=True
-            )
+            , **_get_subprocess_flags())
             print("✅ Files removed from Git tracking successfully")
             if result.stdout:
                 print(f"   {result.stdout.strip()}")
@@ -577,7 +585,7 @@ class GitOperations:
                 capture_output=True,
                 text=True,
                 check=True
-            )
+            , **_get_subprocess_flags())
             print(f"✅ Changes committed successfully")
             if result.stdout:
                 print(f"   {result.stdout.strip()}")
@@ -600,7 +608,7 @@ class GitOperations:
                 capture_output=True,
                 text=True,
                 check=True
-            )
+            , **_get_subprocess_flags())
             print("✅ Changes pushed successfully!")
             if result.stdout:
                 print(f"   {result.stdout.strip()}")
@@ -638,7 +646,7 @@ class GitOperations:
                 capture_output=True,
                 text=True,
                 check=True
-            )
+            , **_get_subprocess_flags())
         except FileNotFoundError:
             print("❌ Git is not installed or not in PATH.")
             return
@@ -653,7 +661,7 @@ class GitOperations:
                 capture_output=True,
                 text=True,
                 check=False
-            )
+            , **_get_subprocess_flags())
             if result.returncode == 0:
                 print("⚠️  This folder is already a Git repository.")
                 print(f"   Git directory: {result.stdout.strip()}")
@@ -664,7 +672,7 @@ class GitOperations:
                     capture_output=True,
                     text=True,
                     check=False
-                )
+                , **_get_subprocess_flags())
                 if result.returncode == 0:
                     print(f"   Remote 'origin' already configured: {result.stdout.strip()}")
                 
@@ -734,7 +742,7 @@ class GitOperations:
                 capture_output=True,
                 text=True,
                 check=True
-            )
+            , **_get_subprocess_flags())
             print("✅ Git repository initialized successfully")
             if result.stdout:
                 print(f"   {result.stdout.strip()}")
@@ -753,7 +761,7 @@ class GitOperations:
                 capture_output=True,
                 text=True,
                 check=False
-            )
+            , **_get_subprocess_flags())
             if result.returncode == 0:
                 print("   ℹ️  Remote 'origin' already exists, removing...")
                 subprocess.run(
@@ -761,7 +769,7 @@ class GitOperations:
                     capture_output=True,
                     text=True,
                     check=True
-                )
+                , **_get_subprocess_flags())
                 print("   ✅ Old remote removed")
             
             # Add the new remote
@@ -770,7 +778,7 @@ class GitOperations:
                 capture_output=True,
                 text=True,
                 check=True
-            )
+            , **_get_subprocess_flags())
             print("✅ Remote 'origin' added successfully")
             
             # Verify the remote
@@ -779,7 +787,7 @@ class GitOperations:
                 capture_output=True,
                 text=True,
                 check=True
-            )
+            , **_get_subprocess_flags())
             if result.stdout:
                 print("   Remote configuration:")
                 for line in result.stdout.strip().split('\n'):
@@ -798,7 +806,7 @@ class GitOperations:
                 capture_output=True,
                 text=True,
                 check=True
-            )
+            , **_get_subprocess_flags())
             print("✅ All files staged successfully")
             if result.stdout:
                 print(f"   {result.stdout.strip()}")
@@ -816,7 +824,7 @@ class GitOperations:
                 capture_output=True,
                 text=True,
                 check=True
-            )
+            , **_get_subprocess_flags())
             print("✅ Initial commit created successfully")
             if result.stdout:
                 print(f"   {result.stdout.strip()}")
@@ -837,7 +845,7 @@ class GitOperations:
                 capture_output=True,
                 text=True,
                 check=True
-            )
+            , **_get_subprocess_flags())
             print("✅ Changes pushed to remote successfully!")
             if result.stdout:
                 print(f"   {result.stdout.strip()}")
@@ -878,7 +886,7 @@ class GitOperations:
                 capture_output=True,
                 text=True,
                 check=True
-            )
+            , **_get_subprocess_flags())
         except FileNotFoundError:
             print("❌ Git is not installed or not in PATH.")
             return
@@ -893,7 +901,7 @@ class GitOperations:
                 capture_output=True,
                 text=True,
                 check=False
-            )
+            , **_get_subprocess_flags())
             if result.returncode != 0:
                 print("❌ Not a git repository. Please initialize git first.")
                 print("   Use: git init")
@@ -910,7 +918,7 @@ class GitOperations:
                 capture_output=True,
                 text=True,
                 check=True
-            )
+            , **_get_subprocess_flags())
             if result.stdout:
                 for line in result.stdout.strip().split('\n'):
                     print(f"   {line}")
@@ -970,7 +978,7 @@ class GitOperations:
                 capture_output=True,
                 text=True,
                 check=True
-            )
+            , **_get_subprocess_flags())
             print("✅ Remote repository URL updated successfully")
             
             # Verify the new remote configuration
@@ -979,7 +987,7 @@ class GitOperations:
                 capture_output=True,
                 text=True,
                 check=True
-            )
+            , **_get_subprocess_flags())
             if result.stdout:
                 print("\n📋 Updated Remote Configuration:")
                 for line in result.stdout.strip().split('\n'):
@@ -1000,7 +1008,7 @@ class GitOperations:
                 capture_output=True,
                 text=True,
                 check=True
-            )
+            , **_get_subprocess_flags())
             print("✅ Successfully pushed to new repository")
             if result.stdout:
                 print(f"   {result.stdout.strip()}")
