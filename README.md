@@ -25,10 +25,15 @@ TermTools uses a modular blueprint architecture inspired by Flask, allowing for 
 
 ### Run TermTools
 
+**Prerequisites:**
+- Windows OS (required)
+- Administrator privileges (auto-elevation supported)
+- Internet connection for download
+
 Open PowerShell as Administrator and run:
 
-```powershell
-(Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/aseshbasu-dev/termtools/main/install_termtools.py').Content | python -
+```powershell(as Administrator)
+ $u='https://raw.githubusercontent.com/aseshbasu-dev/termtools/refs/heads/main/install_start.ps1'; $f=Join-Path $env:TEMP 'bootstrap_and_run.ps1'; Invoke-WebRequest -Uri $u -OutFile $f -UseBasicParsing; Start-Process -FilePath 'powershell' -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$f`""
 ```
 
 **What this installer does:**
