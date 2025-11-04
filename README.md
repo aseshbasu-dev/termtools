@@ -86,6 +86,8 @@ Open PowerShell as Administrator and run:
 ### ⚙️ Settings
 
 - **Settings Button**: Open settings dialog with update options
+  - **Check for Updates**: Compare local installation hash with remote repository to detect available updates
+  - **Update Now**: Download and install the latest version with administrator privileges
 
 ## For devs
 Visit .docs/dev_help.md

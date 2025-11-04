@@ -926,6 +926,18 @@ class TermToolsFrame(wx.Frame):
         update_desc.SetBackgroundColour(DarkTheme.PANEL_BG)
         update_sizer.Add(update_desc, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         
+        # Check for updates button
+        check_update_button = wx.Button(update_panel, label="🔍 Check for Updates", size=wx.Size(-1, 35))
+        self._style_button(check_update_button, text_colour=DarkTheme.TEXT_ACCENT)
+        check_update_button.Bind(wx.EVT_BUTTON, lambda evt: self._on_check_for_updates(update_panel))
+        update_sizer.Add(check_update_button, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+        
+        # Update status label (initially hidden)
+        self.update_status_label = wx.StaticText(update_panel, label="")
+        self.update_status_label.SetForegroundColour(DarkTheme.TEXT_SECONDARY)
+        self.update_status_label.SetBackgroundColour(DarkTheme.PANEL_BG)
+        update_sizer.Add(self.update_status_label, 0, wx.LEFT | wx.RIGHT, 10)
+        
         # Update button
         update_button = wx.Button(update_panel, label="🚀 Update Now", size=wx.Size(-1, 35))
         self._style_button(update_button, text_colour=DarkTheme.TEXT_SUCCESS)
@@ -1035,6 +1047,114 @@ class TermToolsFrame(wx.Frame):
             wx.CallAfter(self._append_output, "❌ PowerShell not found. This feature requires Windows PowerShell.\n")
         except Exception as e:
             wx.CallAfter(self._append_output, f"❌ Unexpected error during update: {e}\n")
+    
+    def _on_check_for_updates(self, update_panel):
+        """Handle the check for updates button click"""
+        # Update status to show checking
+        wx.CallAfter(self._update_status_label, "🔍 Checking for updates...", DarkTheme.TEXT_ACCENT)
+        
+        # Run the update check in a separate thread to avoid blocking the GUI
+        import threading
+        check_thread = threading.Thread(target=self._perform_update_check)
+        check_thread.daemon = True
+        check_thread.start()
+    
+    def _perform_update_check(self):
+        """Perform the actual update check operation"""
+        try:
+            local_hash = self._get_local_installation_hash()
+            remote_hash = self._get_remote_repository_hash()
+            
+            if not remote_hash:
+                wx.CallAfter(self._update_status_label, 
+                           "❌ Unable to check for updates (network error)", 
+                           DarkTheme.TEXT_ERROR)
+                return
+            
+            if not local_hash:
+                wx.CallAfter(self._update_status_label, 
+                           "⚠️ No local installation info found", 
+                           DarkTheme.TEXT_WARNING)
+                wx.CallAfter(self._append_output, 
+                           "💡 This appears to be a development installation.\n")
+                return
+            
+            # Compare hashes (first 8 characters for display)
+            local_short = local_hash[:8] if local_hash else "unknown"
+            remote_short = remote_hash[:8] if remote_hash else "unknown"
+            
+            if local_hash == remote_hash:
+                wx.CallAfter(self._update_status_label, 
+                           f"✅ Up to date (version: {local_short})", 
+                           DarkTheme.TEXT_SUCCESS)
+                wx.CallAfter(self._append_output, 
+                           f"✅ TermTools is up to date! Local: {local_short}, Remote: {remote_short}\n")
+            else:
+                wx.CallAfter(self._update_status_label, 
+                           f"🔄 Update available! Local: {local_short} → Remote: {remote_short}", 
+                           DarkTheme.TEXT_WARNING)
+                wx.CallAfter(self._append_output, 
+                           f"🔄 Update available!\n"
+                           f"   Current version: {local_short}\n"
+                           f"   Latest version:  {remote_short}\n"
+                           f"💡 Click 'Update Now' to install the latest version.\n")
+                
+        except Exception as e:
+            wx.CallAfter(self._update_status_label, 
+                       f"❌ Error checking for updates: {str(e)}", 
+                       DarkTheme.TEXT_ERROR)
+            wx.CallAfter(self._append_output, f"❌ Error checking for updates: {e}\n")
+    
+    def _get_local_installation_hash(self):
+        """Get the local installation commit hash from installation_info.json"""
+        try:
+            import json
+            import os
+            
+            # Look for installation_info.json in the data directory
+            data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "core", "data")
+            metadata_file = os.path.join(data_dir, "installation_info.json")
+            
+            if not os.path.exists(metadata_file):
+                # Try alternative path (for installed version)
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                alt_metadata_file = os.path.join(script_dir, "data", "installation_info.json")
+                if os.path.exists(alt_metadata_file):
+                    metadata_file = alt_metadata_file
+                else:
+                    return None
+            
+            with open(metadata_file, 'r') as f:
+                metadata = json.load(f)
+                return metadata.get("remote_commit_hash")
+                
+        except Exception as e:
+            print(f"Warning: Could not read local installation info: {e}")
+            return None
+    
+    def _get_remote_repository_hash(self):
+        """Get the latest commit hash from GitHub API"""
+        try:
+            import urllib.request
+            import json
+            
+            # GitHub API URL for latest commit
+            url = "https://api.github.com/repos/aseshbasu-dev/termtools/commits/main"
+            
+            with urllib.request.urlopen(url, timeout=10) as response:
+                data = json.loads(response.read().decode('utf-8'))
+                return data["sha"]
+                
+        except Exception as e:
+            print(f"Warning: Could not fetch remote commit hash: {e}")
+            return None
+    
+    def _update_status_label(self, text, color):
+        """Update the status label text and color"""
+        if hasattr(self, 'update_status_label'):
+            self.update_status_label.SetLabel(text)
+            self.update_status_label.SetForegroundColour(color)
+            self.update_status_label.GetParent().Layout()  # Refresh layout
     
     def _append_output(self, text):
         """Append text to the output console"""

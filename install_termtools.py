@@ -66,6 +66,8 @@ Run once as Administrator.
 import os, shutil, tempfile, zipfile, urllib.request, subprocess
 import ctypes, sys
 import winreg
+import json
+from datetime import datetime
 
 # ==========================================
 # CONFIGURATION VARIABLES - MODIFY AS NEEDED
@@ -98,6 +100,45 @@ CLEANUP_ON_ERROR = True                     # Clean up temp files on error
 # ==========================================
 # END CONFIGURATION VARIABLES
 # ==========================================
+
+def get_remote_head_sha(owner, repo, branch="main"):
+    """Get the latest commit hash from GitHub API without installing git packages"""
+    try:
+        url = f"https://api.github.com/repos/{owner}/{repo}/commits/{branch}"
+        with urllib.request.urlopen(url) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            return data["sha"]
+    except Exception as e:
+        print(f"Warning: Could not fetch remote commit hash: {e}")
+        return None
+
+def save_installation_metadata(target_app, repo_owner, repo_name, commit_hash):
+    """Save installation timestamp and commit hash to installation_info.json"""
+    try:
+        data_dir = os.path.join(target_app, "core", "data")
+        os.makedirs(data_dir, exist_ok=True)
+        
+        metadata_file = os.path.join(data_dir, "installation_info.json")
+        
+        metadata = {
+            "installation_timestamp": datetime.now().isoformat(),
+            "repository": f"{repo_owner}/{repo_name}",
+            "remote_commit_hash": commit_hash,
+            "installer_version": "2.0",
+            "installation_path": target_app
+        }
+        
+        with open(metadata_file, 'w') as f:
+            json.dump(metadata, f, indent=2)
+        
+        print(f"Installation metadata saved to {metadata_file}")
+        if commit_hash:
+            print(f"Remote commit hash: {commit_hash[:8]}...")
+        print(f"Installation time: {metadata['installation_timestamp']}")
+        
+    except Exception as e:
+        print(f"Warning: Could not save installation metadata: {e}")
+
 
 
 
@@ -241,6 +282,11 @@ try:
     except Exception as e:
         print(f"❌ Error setting up context menu: {e}")
         raise
+
+    # Get remote commit hash and save installation metadata
+    print("🔧 Saving installation metadata...")
+    commit_hash = get_remote_head_sha(REPO_OWNER, REPO_NAME, REPO_BRANCH)
+    save_installation_metadata(target_app, REPO_OWNER, REPO_NAME, commit_hash)
 
     print(f"\n🎉 {TARGET_APP_FOLDER} installation completed successfully!")
     print(f"📍 Installation location: {target_app}")
