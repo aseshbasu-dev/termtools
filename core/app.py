@@ -15,6 +15,7 @@ from .modules.python_env import python_env_bp
 from .modules.cleanup import cleanup_bp
 from .modules.git_operations import git_operations_bp
 from .modules.folder_copy import folder_copy_bp
+from .modules.pomodoro import pomodoro_bp
 
 
 # ANSI Color codes for terminal styling (optimized for dark terminals)
@@ -74,6 +75,7 @@ class TermTools(TermToolsApp):
             project_templates_bp,
             cleanup_bp,
             folder_copy_bp,
+            pomodoro_bp,
             power_manager_bp
         ]
         

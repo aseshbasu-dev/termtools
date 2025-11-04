@@ -162,15 +162,32 @@ class SplitButton(wx.Panel):
 
 
 class OutputRedirector:
-    """Redirects stdout/stderr to a wx.TextCtrl"""
+    """Redirects stdout/stderr to both wx.TextCtrl and log file"""
     
-    def __init__(self, text_ctrl):
+    def __init__(self, text_ctrl, log_file_path=None):
         self.text_ctrl = text_ctrl
         self.buffer = io.StringIO()
+        self.log_file_path = log_file_path
+        self.original_stdout = sys.stdout
+        self.original_stderr = sys.stderr
         
     def write(self, text):
-        """Write text to the text control"""
+        """Write text to both text control and log file"""
+        # Write to GUI
         wx.CallAfter(self._append_text, text)
+        
+        # Write to log file
+        if self.log_file_path:
+            try:
+                with open(self.log_file_path, 'a', encoding='utf-8') as f:
+                    # Strip ANSI color codes for file
+                    import re
+                    clean_text = re.sub(r'\033\[[0-9;]*m', '', text)
+                    f.write(clean_text)
+                    f.flush()
+            except Exception as e:
+                # Silently fail if logging fails to avoid infinite loops
+                pass
         
     def _append_text(self, text):
         """Append text to the control (called in main thread)"""
@@ -207,6 +224,9 @@ class TermToolsFrame(wx.Frame):
         
         # Create UI
         self._create_ui()
+        
+        # Bind close event
+        self.Bind(wx.EVT_CLOSE, self.on_window_close)
         
         # Center on screen
         self.Centre()
@@ -298,9 +318,18 @@ class TermToolsFrame(wx.Frame):
         # Store reference for SetStatusText method
         self.status_bar = status_panel
 
-        main_panel.SetSizer(main_sizer)        # Setup output redirection
-        self.stdout_redirector = OutputRedirector(self.output_text)
-        self.stderr_redirector = OutputRedirector(self.output_text)
+        main_panel.SetSizer(main_sizer)
+        
+        # Setup logging
+        self.log_file_path = self._setup_logging()
+        
+        # Setup output redirection with logging
+        self.stdout_redirector = OutputRedirector(self.output_text, self.log_file_path)
+        self.stderr_redirector = OutputRedirector(self.output_text, self.log_file_path)
+        
+        # Redirect sys.stdout and sys.stderr
+        sys.stdout = self.stdout_redirector
+        sys.stderr = self.stderr_redirector
         
         # Status bar
         self.SetStatusText(f"Ready - Current directory: {self.current_dir}")
@@ -341,20 +370,48 @@ class TermToolsFrame(wx.Frame):
         author.SetBackgroundColour(DarkTheme.HEADER_BG)
         sizer.Add(author, 0, wx.ALIGN_CENTER | wx.TOP | wx.BOTTOM, 5)
         
-        # Current directory
-        dir_label = wx.StaticText(panel, label=f"📁 {self.current_dir}")
-        dir_label.SetFont(wx.Font(9, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        dir_label.SetForegroundColour(DarkTheme.TEXT_MUTED)
-        dir_label.SetBackgroundColour(DarkTheme.HEADER_BG)
-        sizer.Add(dir_label, 0, wx.ALIGN_CENTER | wx.BOTTOM, 5)
+        # Separator line
+        separator = wx.StaticLine(panel, style=wx.LI_HORIZONTAL)
+        separator.SetBackgroundColour(DarkTheme.SEPARATOR)
+        sizer.Add(separator, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 20)
         
-        # Shutdown status indicator
-        self.shutdown_status_label = wx.StaticText(panel, label="")
+        # Status section panel with darker background
+        status_panel = wx.Panel(panel)
+        status_panel.SetBackgroundColour(DarkTheme.PANEL_BG)
+        status_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # Status section title with date/time
+        from datetime import datetime
+        current_datetime = datetime.now().strftime("%B %d, %Y %I:%M:%S %p")
+        self.status_title_label = wx.StaticText(status_panel, label=f"STATUS ON {current_datetime}")
+        status_title_font = wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+        self.status_title_label.SetFont(status_title_font)
+        self.status_title_label.SetForegroundColour(DarkTheme.TEXT_ACCENT)
+        self.status_title_label.SetBackgroundColour(DarkTheme.PANEL_BG)
+        status_sizer.Add(self.status_title_label, 0, wx.ALIGN_CENTER | wx.TOP, 8)
+        
+        # Current directory status
+        dir_label = wx.StaticText(status_panel, label=f"📁 Current Folder: {self.current_dir}")
+        dir_label.SetFont(wx.Font(9, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        dir_label.SetForegroundColour(DarkTheme.TEXT_PRIMARY)
+        dir_label.SetBackgroundColour(DarkTheme.PANEL_BG)
+        status_sizer.Add(dir_label, 0, wx.ALIGN_CENTER | wx.TOP, 5)
+        
+        # Shutdown timer status (dynamic)
+        self.shutdown_status_label = wx.StaticText(status_panel, label="⚡ Shutdown Timer: Not Scheduled")
         shutdown_font = wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
         self.shutdown_status_label.SetFont(shutdown_font)
-        self.shutdown_status_label.SetForegroundColour(DarkTheme.TEXT_ERROR)
-        self.shutdown_status_label.SetBackgroundColour(DarkTheme.HEADER_BG)
-        sizer.Add(self.shutdown_status_label, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+        self.shutdown_status_label.SetForegroundColour(DarkTheme.TEXT_SUCCESS)
+        self.shutdown_status_label.SetBackgroundColour(DarkTheme.PANEL_BG)
+        status_sizer.Add(self.shutdown_status_label, 0, wx.ALIGN_CENTER | wx.TOP | wx.BOTTOM, 5)
+        
+        status_panel.SetSizer(status_sizer)
+        sizer.Add(status_panel, 0, wx.EXPAND | wx.TOP, 5)
+        
+        # Bottom separator line
+        separator2 = wx.StaticLine(panel, style=wx.LI_HORIZONTAL)
+        separator2.SetBackgroundColour(DarkTheme.SEPARATOR)
+        sizer.Add(separator2, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 20)
         
         # Update shutdown status on initial load
         self._update_shutdown_status()
@@ -372,6 +429,7 @@ class TermToolsFrame(wx.Frame):
             "🐍 PYTHON ENVIRONMENT": DarkTheme.CATEGORY_PYTHON,
             "📁 PROJECT TEMPLATES": DarkTheme.CATEGORY_PROJECT,
             "🧹 CLEANUP": DarkTheme.CATEGORY_CLEANUP,
+            "🎯 PRODUCTIVITY": wx.Colour(255, 179, 71),  # Orange for productivity
             "⚡ POWER MANAGEMENT": DarkTheme.CATEGORY_POWER,
         }
         
@@ -750,8 +808,9 @@ class TermToolsFrame(wx.Frame):
                     total_seconds = int(time_remaining.total_seconds())
                     
                     if total_seconds <= 0:
-                        # Time has passed, clear status
-                        self.shutdown_status_label.SetLabel("")
+                        # Time has passed, set to not scheduled
+                        self.shutdown_status_label.SetLabel("⚡ Shutdown Timer: Not Scheduled")
+                        self.shutdown_status_label.SetForegroundColour(DarkTheme.TEXT_SUCCESS)
                         return
                     
                     hours = total_seconds // 3600
@@ -765,18 +824,55 @@ class TermToolsFrame(wx.Frame):
                     else:
                         time_str = f"{seconds}s"
                     
-                    self.shutdown_status_label.SetLabel(f"⚠️ SHUTDOWN SCHEDULED FOR {time_str}")
+                    self.shutdown_status_label.SetLabel(f"⚡ Shutdown Timer: {time_str} remaining")
+                    self.shutdown_status_label.SetForegroundColour(DarkTheme.TEXT_ERROR)
                 else:
-                    self.shutdown_status_label.SetLabel("")
+                    self.shutdown_status_label.SetLabel("⚡ Shutdown Timer: Not Scheduled")
+                    self.shutdown_status_label.SetForegroundColour(DarkTheme.TEXT_SUCCESS)
             else:
-                self.shutdown_status_label.SetLabel("")
+                self.shutdown_status_label.SetLabel("⚡ Shutdown Timer: Not Scheduled")
+                self.shutdown_status_label.SetForegroundColour(DarkTheme.TEXT_SUCCESS)
         except Exception as e:
             # Silently handle errors to avoid disrupting the UI
             pass
     
+    def _setup_logging(self):
+        """Setup logging to file"""
+        from datetime import datetime
+        from pathlib import Path
+        
+        # Create logs directory if it doesn't exist
+        log_dir = Path("core/data/logs")
+        log_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create log file with date
+        log_filename = f"termtools_{datetime.now().strftime('%Y%m%d')}.log"
+        log_file_path = log_dir / log_filename
+        
+        # Write session header
+        try:
+            with open(log_file_path, 'a', encoding='utf-8') as f:
+                f.write("\n")
+                f.write("="*80 + "\n")
+                f.write(f"TermTools Session - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("="*80 + "\n")
+                f.write("\n")
+        except Exception as e:
+            print(f"⚠️  Warning: Could not create log file: {e}")
+            return None
+        
+        return str(log_file_path)
+    
     def on_status_timer(self, event):
-        """Timer event handler for updating shutdown status"""
+        """Timer event handler for updating shutdown status and time"""
+        # Update shutdown status
         self._update_shutdown_status()
+        
+        # Update current date/time
+        from datetime import datetime
+        current_datetime = datetime.now().strftime("%B %d, %Y %I:%M:%S %p")
+        if hasattr(self, 'status_title_label'):
+            self.status_title_label.SetLabel(f"STATUS ON {current_datetime}")
     
     def on_clear_output(self, event):
         """Clear the output console"""
@@ -797,19 +893,95 @@ class TermToolsFrame(wx.Frame):
         )
         
         if dlg.ShowModal() == wx.ID_YES:
+            self._cleanup_on_exit()
             self.Close()
         
         dlg.Destroy()
+    
+    def on_window_close(self, event):
+        """Handle window close event (X button)"""
+        # Check if Pomodoro timer is open
+        from .modules.pomodoro import PomodoroTimer
+        
+        if PomodoroTimer._instance is not None and PomodoroTimer._instance.IsShown():
+            # Ask user what to do
+            dlg = wx.MessageDialog(
+                self,
+                "Pomodoro timer is still running.\n\n"
+                "Do you want to close everything?\n\n"
+                "• Click 'Yes' to close everything (including timer)\n"
+                "• Click 'No' to hide main window and keep timer running\n"
+                "• Click 'Cancel' to return to TermTools",
+                "Pomodoro Timer Running",
+                wx.YES_NO | wx.CANCEL | wx.ICON_QUESTION | wx.NO_DEFAULT
+            )
+            
+            result = dlg.ShowModal()
+            dlg.Destroy()
+            
+            if result == wx.ID_YES:
+                # Close everything and exit app
+                if PomodoroTimer._instance:
+                    PomodoroTimer._instance.Close()
+                self._cleanup_on_exit()
+                self.Destroy()
+                # Exit the application
+                wx.GetApp().ExitMainLoop()
+            elif result == wx.ID_NO:
+                # Hide main window, keep timer running
+                print("💡 Main window hidden. Pomodoro timer continues running.")
+                print("   (Close the Pomodoro timer to exit the application)")
+                self.Hide()
+                # Veto the close event to keep the frame alive but hidden
+                event.Veto()
+            else:
+                # Cancel - veto the close
+                event.Veto()
+        else:
+            # No timer running, close everything and exit
+            self._cleanup_on_exit()
+            self.Destroy()
+            wx.GetApp().ExitMainLoop()
+    
+    def _cleanup_on_exit(self):
+        """Cleanup and log session end"""
+        from datetime import datetime
+        
+        # Write session end to log
+        if hasattr(self, 'log_file_path') and self.log_file_path:
+            try:
+                with open(self.log_file_path, 'a', encoding='utf-8') as f:
+                    f.write("\n")
+                    f.write("="*80 + "\n")
+                    f.write(f"Session ended - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write("="*80 + "\n")
+                    f.write("\n")
+            except Exception:
+                pass  # Silently fail
+        
+        # Restore original stdout/stderr
+        if hasattr(self, 'stdout_redirector') and hasattr(self.stdout_redirector, 'original_stdout'):
+            sys.stdout = self.stdout_redirector.original_stdout
+        if hasattr(self, 'stderr_redirector') and hasattr(self.stderr_redirector, 'original_stderr'):
+            sys.stderr = self.stderr_redirector.original_stderr
 
 
 class TermToolsWxApp(wx.App):
+
     """wxPython application class for TermTools"""
     
     def OnInit(self):
         """Initialize the application"""
+        # Don't exit when last window closes - we manage this manually
+        self.SetExitOnFrameDelete(False)
+        
         self.frame = TermToolsFrame()
         self.frame.Show()
         return True
+    
+    def OnExit(self):
+        """Called when application is about to exit"""
+        return 0
 
 
 def run_wx_app():

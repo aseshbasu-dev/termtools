@@ -13,6 +13,7 @@ from .python_env import python_env_bp
 from .cleanup import cleanup_bp
 from .git_operations import git_operations_bp
 from .folder_copy import folder_copy_bp
+from .pomodoro import pomodoro_bp
 
 __all__ = [
     'project_templates_bp',
@@ -20,7 +21,8 @@ __all__ = [
     'python_env_bp',
     'cleanup_bp',
     'git_operations_bp',
-    'folder_copy_bp'
+    'folder_copy_bp',
+    'pomodoro_bp'
 ]
 
 
