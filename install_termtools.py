@@ -121,9 +121,11 @@ def get_remote_head_sha(owner, repo, branch="main"):
         return None
 
 def save_installation_metadata(target_app, repo_owner, repo_name, commit_hash):
-    """Save installation timestamp and commit hash to installation_info.json"""
+    """Save installation timestamp and commit hash to user's AppData directory"""
     try:
-        data_dir = os.path.join(target_app, "core", "data")
+        # Save to user's AppData\Local directory (writable without admin)
+        appdata_local = os.environ.get('LOCALAPPDATA', os.path.expanduser('~\\AppData\\Local'))
+        data_dir = os.path.join(appdata_local, 'BasusTools', 'TermTools')
         os.makedirs(data_dir, exist_ok=True)
         
         metadata_file = os.path.join(data_dir, "installation_info.json")
@@ -134,19 +136,20 @@ def save_installation_metadata(target_app, repo_owner, repo_name, commit_hash):
             "remote_commit_hash": commit_hash,
             "installer_version": "2.0",
             "installation_path": target_app,
-            "dev_mode": False
+            "data_directory": data_dir
         }
         
         with open(metadata_file, 'w') as f:
             json.dump(metadata, f, indent=2)
         
-        print(f"Installation metadata saved to {metadata_file}")
+        print(f"✅ Installation metadata saved to {metadata_file}")
         if commit_hash:
-            print(f"Remote commit hash: {commit_hash[:8]}...")
-        print(f"Installation time: {metadata['installation_timestamp']}")
+            print(f"   Remote commit hash: {commit_hash[:8]}...")
+        print(f"   Installation time: {metadata['installation_timestamp']}")
+        print(f"   Data directory: {data_dir}")
         
     except Exception as e:
-        print(f"Warning: Could not save installation metadata: {e}")
+        print(f"⚠️  Warning: Could not save installation metadata: {e}")
 
 
 

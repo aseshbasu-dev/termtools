@@ -10,6 +10,7 @@ import os
 import shutil
 import venv
 import subprocess
+import threading
 from pathlib import Path
 from ..blueprint import Blueprint
 
@@ -35,19 +36,44 @@ class PythonEnvironment:
     
     @staticmethod
     def _show_gui_confirmation(message, title="Confirm Action"):
-        """Show GUI confirmation dialog, fail with comprehensive error if GUI unavailable"""
+        """Show GUI confirmation dialog, thread-safe for background operations"""
         try:
-            # Check if we're in a GUI environment by trying to create a dialog
+            # Check if we're in a GUI environment
             if wx and wx.GetApp():
-                dlg = wx.MessageDialog(
-                    None,  # Use None as parent, wx will find appropriate parent
-                    message,
-                    title,
-                    wx.YES_NO | wx.ICON_QUESTION | wx.NO_DEFAULT
-                )
-                result = dlg.ShowModal()
-                dlg.Destroy()
-                return result == wx.ID_YES
+                # If we're already on the main thread, show dialog directly
+                if threading.current_thread() is threading.main_thread():
+                    dlg = wx.MessageDialog(
+                        None,
+                        message,
+                        title,
+                        wx.YES_NO | wx.ICON_QUESTION | wx.NO_DEFAULT
+                    )
+                    result = dlg.ShowModal()
+                    dlg.Destroy()
+                    return result == wx.ID_YES
+                else:
+                    # We're on a background thread, use wx.CallAfter with event
+                    result_holder = {'result': None, 'done': threading.Event()}
+                    
+                    def show_on_main_thread():
+                        try:
+                            dlg = wx.MessageDialog(
+                                None,
+                                message,
+                                title,
+                                wx.YES_NO | wx.ICON_QUESTION | wx.NO_DEFAULT
+                            )
+                            result_holder['result'] = (dlg.ShowModal() == wx.ID_YES)
+                            dlg.Destroy()
+                        except Exception as e:
+                            print(f"❌ Dialog error: {e}")
+                            result_holder['result'] = False
+                        finally:
+                            result_holder['done'].set()
+                    
+                    wx.CallAfter(show_on_main_thread)
+                    result_holder['done'].wait(timeout=30)  # Wait up to 30 seconds
+                    return result_holder['result'] if result_holder['result'] is not None else False
             else:
                 PythonEnvironment._show_gui_unavailable_error("confirmation dialog", message, title)
                 return False
@@ -63,25 +89,55 @@ class PythonEnvironment:
     
     @staticmethod
     def _show_gui_choice(message, title, choices, default_choice=0):
-        """Show GUI choice dialog, fail with comprehensive error if GUI unavailable"""
+        """Show GUI choice dialog, thread-safe for background operations"""
         try:
             # Check if we're in a GUI environment
             if wx and wx.GetApp():
-                dlg = wx.SingleChoiceDialog(
-                    None,
-                    message,
-                    title,
-                    choices
-                )
-                dlg.SetSelection(default_choice)
-                
-                if dlg.ShowModal() == wx.ID_OK:
-                    selection = dlg.GetSelection()
-                    dlg.Destroy()
-                    return selection
+                # If we're already on the main thread, show dialog directly
+                if threading.current_thread() is threading.main_thread():
+                    dlg = wx.SingleChoiceDialog(
+                        None,
+                        message,
+                        title,
+                        choices
+                    )
+                    dlg.SetSelection(default_choice)
+                    
+                    if dlg.ShowModal() == wx.ID_OK:
+                        selection = dlg.GetSelection()
+                        dlg.Destroy()
+                        return selection
+                    else:
+                        dlg.Destroy()
+                        return -1  # Cancelled
                 else:
-                    dlg.Destroy()
-                    return -1  # Cancelled
+                    # We're on a background thread, use wx.CallAfter with event
+                    result_holder = {'result': -1, 'done': threading.Event()}
+                    
+                    def show_on_main_thread():
+                        try:
+                            dlg = wx.SingleChoiceDialog(
+                                None,
+                                message,
+                                title,
+                                choices
+                            )
+                            dlg.SetSelection(default_choice)
+                            
+                            if dlg.ShowModal() == wx.ID_OK:
+                                result_holder['result'] = dlg.GetSelection()
+                            else:
+                                result_holder['result'] = -1
+                            dlg.Destroy()
+                        except Exception as e:
+                            print(f"❌ Dialog error: {e}")
+                            result_holder['result'] = -1
+                        finally:
+                            result_holder['done'].set()
+                    
+                    wx.CallAfter(show_on_main_thread)
+                    result_holder['done'].wait(timeout=30)  # Wait up to 30 seconds
+                    return result_holder['result']
             else:
                 PythonEnvironment._show_gui_unavailable_error("choice dialog", message, title, choices)
                 return -1
@@ -840,33 +896,42 @@ Specify the license for your project.
         
         if requirements_path.exists():
             print("ℹ️  Found existing requirements.txt file.")
-            try:
-                # Get the appropriate pip path for the virtual environment
-                if os.name == 'nt':  # Windows
-                    pip_path = venv_path / "Scripts" / "pip.exe"
-                else:  # Unix-like systems
-                    pip_path = venv_path / "bin" / "pip"
-                
-                print("📥 Installing requirements...")
-                result = subprocess.run([str(pip_path), 'install', '-r', 'requirements.txt'], 
-                                      capture_output=True, text=True, **_get_subprocess_flags())
-                
-                if result.returncode == 0:
-                    print("✅ Requirements installed successfully.")
-                    if result.stdout.strip():
-                        # Show some output but not too verbose
-                        lines = result.stdout.strip().split('\n')
-                        for line in lines[-5:]:  # Show last 5 lines
-                            print(f"   {line}")
-                else:
-                    print(f"❌ Error installing requirements:")
-                    if result.stderr:
-                        print(f"   {result.stderr.strip()}")
+            
+            message = f"Found requirements.txt file at:\n{requirements_path.absolute()}\n\nDo you want to install the requirements?"
+            choices = ["Yes, install requirements", "No, skip installation"]
+            choice = PythonEnvironment._show_gui_choice(message, "Install Requirements", choices, default_choice=0)
+            
+            if choice == 0:  # Yes, install
+                try:
+                    # Get the appropriate pip path for the virtual environment
+                    if os.name == 'nt':  # Windows
+                        pip_path = venv_path / "Scripts" / "pip.exe"
+                    else:  # Unix-like systems
+                        pip_path = venv_path / "bin" / "pip"
+                    
+                    print("📥 Installing requirements...")
+                    result = subprocess.run([str(pip_path), 'install', '-r', 'requirements.txt'], 
+                                          capture_output=True, text=True, **_get_subprocess_flags())
+                    
+                    if result.returncode == 0:
+                        print("✅ Requirements installed successfully.")
+                        if result.stdout.strip():
+                            # Show some output but not too verbose
+                            lines = result.stdout.strip().split('\n')
+                            for line in lines[-5:]:  # Show last 5 lines
+                                print(f"   {line}")
+                    else:
+                        print(f"❌ Error installing requirements:")
+                        if result.stderr:
+                            print(f"   {result.stderr.strip()}")
+                        print("💡 You can manually install by running: pip install -r requirements.txt")
+                            
+                except Exception as e:
+                    print(f"❌ Error installing requirements: {e}")
                     print("💡 You can manually install by running: pip install -r requirements.txt")
-                        
-            except Exception as e:
-                print(f"❌ Error installing requirements: {e}")
-                print("💡 You can manually install by running: pip install -r requirements.txt")
+            else:
+                print("ℹ️  Skipped requirements installation.")
+                print("💡 You can manually install later by running: pip install -r requirements.txt")
         else:
             print("ℹ️  No requirements.txt found.")
             

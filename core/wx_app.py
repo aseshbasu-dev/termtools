@@ -15,7 +15,29 @@ import subprocess
 import threading
 from contextlib import redirect_stdout, redirect_stderr
 from typing import Dict, List
+from pathlib import Path
 from .app import TermTools
+
+
+def get_data_directory():
+    """
+    Get the appropriate data directory for writable files.
+    
+    In both dev and production modes, writable data files (logs, stats, state files)
+    are stored in the user's AppData\Local directory to avoid permission issues.
+    
+    Returns:
+        Path: Path to the data directory (C:\\Users\\<username>\\AppData\\Local\\BasusTools\\TermTools)
+    """
+    if os.name == 'nt':  # Windows
+        appdata_local = os.environ.get('LOCALAPPDATA', os.path.expanduser('~\\AppData\\Local'))
+        data_dir = Path(appdata_local) / 'BasusTools' / 'TermTools'
+    else:  # Unix/Linux/Mac
+        data_dir = Path.home() / '.local' / 'share' / 'BasusTools' / 'TermTools'
+    
+    # Ensure directory exists
+    data_dir.mkdir(parents=True, exist_ok=True)
+    return data_dir
 
 
 def get_subprocess_creation_flags():
@@ -877,11 +899,33 @@ class TermToolsFrame(wx.Frame):
                 # Store remote URL for copy functionality
                 self.git_remote_url = remote_url
                 
-                # Display repo name with full URL (with click hint)
+                # Get current branch name
+                current_branch = None
+                try:
+                    branch_result = subprocess.run(
+                        ['git', 'branch', '--show-current'],
+                        capture_output=True,
+                        text=True,
+                        cwd=self.current_dir,
+                        check=False,
+                        **get_subprocess_creation_flags()
+                    )
+                    if branch_result.returncode == 0:
+                        current_branch = branch_result.stdout.strip()
+                except Exception:
+                    current_branch = None
+                
+                # Display repo name with full URL and current branch (with click hint)
                 if remote_url:
-                    self.git_repo_label.SetLabel(f"🔗 Git Repository: {repo_name} ({remote_url}) [copy]")
+                    if current_branch:
+                        self.git_repo_label.SetLabel(f"🔗 Git Repository: {repo_name} ({remote_url}) | Branch: {current_branch} [copy]")
+                    else:
+                        self.git_repo_label.SetLabel(f"🔗 Git Repository: {repo_name} ({remote_url}) [copy]")
                 else:
-                    self.git_repo_label.SetLabel(f"🔗 Git Repository: {repo_name}")
+                    if current_branch:
+                        self.git_repo_label.SetLabel(f"🔗 Git Repository: {repo_name} | Branch: {current_branch}")
+                    else:
+                        self.git_repo_label.SetLabel(f"🔗 Git Repository: {repo_name}")
                 self.git_repo_label.Show()
                 
                 # Get last commit date and time
@@ -956,34 +1000,12 @@ class TermToolsFrame(wx.Frame):
             pass
     
     def _setup_logging(self):
-        """Setup logging to file"""
+        """Setup logging to file in user's AppData directory"""
         from datetime import datetime
-        from pathlib import Path
-        import json
         
-        # Determine if running in dev mode by reading installation_info.json
-        current_script_dir = Path(__file__).resolve().parent.parent  # Go up from core/ to TermTools root
-        installation_info_path = current_script_dir / "core" / "data" / "installation_info.json"
-        
-        is_dev_mode = True  # Default to dev mode
-        
-        # Try to read dev_mode flag from installation_info.json
-        try:
-            if installation_info_path.exists():
-                with open(installation_info_path, 'r') as f:
-                    installation_info = json.load(f)
-                    is_dev_mode = installation_info.get("dev_mode", True)
-        except Exception as e:
-            # If we can't read the file, default to dev mode
-            print(f"⚠️  Warning: Could not read installation_info.json: {e}")
-            print(f"   Defaulting to dev mode")
-        
-        if is_dev_mode:
-            # Development mode: logs go to current directory (where TermTools was clicked)
-            log_dir = Path(os.getcwd()) / "core" / "data" / "logs"
-        else:
-            # Production mode: logs go to Program Files installation directory
-            log_dir = Path(r"C:\Program Files\BasusTools\TermTools\core\data\logs")
+        # All logs go to user's AppData\Local directory (writable without admin rights)
+        data_dir = get_data_directory()
+        log_dir = data_dir / "logs"
         
         # Create logs directory if it doesn't exist
         log_dir.mkdir(parents=True, exist_ok=True)
@@ -998,7 +1020,7 @@ class TermToolsFrame(wx.Frame):
                 f.write("\n")
                 f.write("="*80 + "\n")
                 f.write(f"TermTools Session - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write(f"Mode: {'Development' if is_dev_mode else 'Production'}\n")
+                f.write(f"Data Directory: {data_dir}\n")
                 f.write(f"Working Directory: {os.getcwd()}\n")
                 f.write("="*80 + "\n")
                 f.write("\n")
@@ -1274,18 +1296,17 @@ class TermToolsFrame(wx.Frame):
         """Get the local installation commit hash from installation_info.json"""
         try:
             import json
-            import os
             
-            # Check the installed location from Program Files ONLY
-            # This ensures we always check the actual installed version
-            installed_path = r"C:\Program Files\BasusTools\TermTools\core\data\installation_info.json"
+            # Check user's AppData directory for installation info
+            data_dir = get_data_directory()
+            installation_info_path = data_dir / "installation_info.json"
             
-            if not os.path.exists(installed_path):
-                print(f"❌ Installation info not found at: {installed_path}")
+            if not installation_info_path.exists():
+                print(f"❌ Installation info not found at: {installation_info_path}")
                 print("💡 TermTools must be installed via the installer to use update checks.")
                 return None
             
-            with open(installed_path, 'r') as f:
+            with open(installation_info_path, 'r') as f:
                 metadata = json.load(f)
                 commit_hash = metadata.get("remote_commit_hash")
                 if not commit_hash:

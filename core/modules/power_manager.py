@@ -4,7 +4,7 @@ Built by Asesh Basu
 
 This module provides system power management functionality including
 scheduling shutdown operations with various time options.
-State is persisted in JSON format in core/data/shutdown_state.json.
+State is persisted in JSON format in user's AppData directory.
 """
 
 import os
@@ -14,6 +14,7 @@ import json
 from datetime import datetime, timedelta
 from pathlib import Path
 from ..blueprint import Blueprint
+from ..wx_app import get_data_directory
 
 def _get_subprocess_flags():
     """Get subprocess creation flags to prevent console window flashing on Windows"""
@@ -32,8 +33,9 @@ class SystemPowerManager:
     def __init__(self):
         self.shutdown_timer = None
         self.shutdown_active = False
-        # Use JSON file in core/data directory
-        self.state_file = Path("core/data/shutdown_state.json")
+        # Use user's AppData directory for writable files
+        data_dir = get_data_directory()
+        self.state_file = data_dir / "shutdown_state.json"
     
     def _show_gui_confirmation(self, message, title="Confirm Action"):
         """Show GUI confirmation dialog"""

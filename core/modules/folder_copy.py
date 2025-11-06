@@ -68,37 +68,70 @@ class FolderCopyOperations:
     @staticmethod
     def _get_modification_text_from_user():
         """Get modification text from user via GUI dialog."""
+        import threading
+        import time
+        
         try:
             # Get current folder name for dynamic example
             current_dir = Path(os.getcwd())
             folder_name = current_dir.name
             
             # Check if we're in a GUI environment
-            if wx and wx.GetApp():
-                dlg = wx.TextEntryDialog(
-                    None,  # Use None as parent, wx will find appropriate parent
-                    f"Enter modification text for the copied folder:\n\n"
-                    f"The folder will be named: <folder_name>_copy_<your_text>\n"
-                    f"Example: {folder_name}_copy_backup",
-                    "Folder Copy - Enter Modification Text",
-                    "backup"  # Default value
-                )
+            app = wx.GetApp()
+            if app:
+                # Use a dictionary to store the result from the main thread
+                result_container = {'value': None, 'completed': False}
                 
-                result = None
-                if dlg.ShowModal() == wx.ID_OK:
-                    text = dlg.GetValue().strip()
-                    if text:
-                        # Clean the text to be filesystem-safe
-                        result = FolderCopyOperations._clean_filename(text)
-                    else:
-                        wx.MessageBox(
-                            "Modification text cannot be empty!",
-                            "Invalid Input",
-                            wx.OK | wx.ICON_WARNING
+                def show_dialog():
+                    """Show dialog on main GUI thread"""
+                    try:
+                        dlg = wx.TextEntryDialog(
+                            None,  # Use None as parent, wx will find appropriate parent
+                            f"Enter modification text for the copied folder:\n\n"
+                            f"The folder will be named: <folder_name>_copy_<your_text>\n"
+                            f"Example: {folder_name}_copy_backup",
+                            "Folder Copy - Enter Modification Text",
+                            "backup"  # Default value
                         )
+                        
+                        if dlg.ShowModal() == wx.ID_OK:
+                            text = dlg.GetValue().strip()
+                            if text:
+                                # Clean the text to be filesystem-safe
+                                result_container['value'] = FolderCopyOperations._clean_filename(text)
+                            else:
+                                wx.MessageBox(
+                                    "Modification text cannot be empty!",
+                                    "Invalid Input",
+                                    wx.OK | wx.ICON_WARNING
+                                )
+                                result_container['value'] = "backup"
+                        else:
+                            # User cancelled
+                            result_container['value'] = None
+                        
+                        dlg.Destroy()
+                        result_container['completed'] = True
+                    except Exception as e:
+                        print(f"❌ Error in dialog: {e}")
+                        result_container['value'] = "backup"
+                        result_container['completed'] = True
                 
-                dlg.Destroy()
-                return result
+                # Call the dialog on the main thread and wait for it to complete
+                wx.CallAfter(show_dialog)
+                
+                # Wait for the dialog to complete (with timeout)
+                timeout = 60  # 60 seconds timeout
+                elapsed = 0.0
+                while not result_container['completed'] and elapsed < timeout:
+                    time.sleep(0.1)
+                    elapsed += 0.1
+                
+                if not result_container['completed']:
+                    print("⏱️  Dialog timeout - using default modification text")
+                    return "backup"
+                
+                return result_container['value']
             else:
                 print("❌ GUI text entry dialog unavailable - TermTools requires GUI mode")
                 print("💡 Using default modification text: 'backup'")

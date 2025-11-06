@@ -15,6 +15,7 @@ import threading
 import time
 import os
 from ..blueprint import Blueprint
+from ..wx_app import get_data_directory
 
 # Import platform-specific sound module
 if os.name == 'nt':  # Windows
@@ -33,7 +34,9 @@ class PomodoroStats:
     """Manage Pomodoro statistics and persistence"""
     
     def __init__(self):
-        self.stats_file = Path("core/data/pomodoro_stats.json")
+        # Use user's AppData directory for writable files
+        data_dir = get_data_directory()
+        self.stats_file = data_dir / "pomodoro_stats.json"
         self._ensure_stats_file()
     
     def _ensure_stats_file(self):

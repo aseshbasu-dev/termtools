@@ -196,6 +196,95 @@ class GitOperations:
             return GitOperations._get_confirmation_gui(message, title)
 
     @staticmethod
+    def _get_branch_name_input(app=None):
+        """
+        Get branch name from user via GUI dialog.
+        
+        Args:
+            app: TermTools app instance (used to detect GUI mode)
+            
+        Returns:
+            str: Branch name or None if cancelled
+        """
+        return GitOperations._get_branch_name_gui_threadsafe()
+    
+    @staticmethod
+    def _get_branch_name_gui():
+        """Get branch name via GUI dialog"""
+        try:
+            import wx
+            
+            # Create dialog for branch name input
+            dlg = wx.TextEntryDialog(
+                None,
+                "Enter new branch name:",
+                "Create New Branch",
+                "feature/new-feature"  # Default value
+            )
+            dlg.SetSize(wx.Size(400, 150))  # Make dialog wider for better text entry
+            
+            if dlg.ShowModal() == wx.ID_OK:
+                branch_name = dlg.GetValue().strip()
+                dlg.Destroy()
+                return branch_name if branch_name else "feature/new-feature"
+            else:
+                dlg.Destroy()
+                return None  # User cancelled
+        except Exception as e:
+            print(f"❌ Error showing GUI dialog: {e}")
+            return "feature/new-feature"  # Fallback to default name
+    
+    @staticmethod
+    def _get_branch_name_gui_threadsafe():
+        """Thread-safe version using wx.CallAfter for GUI operations"""
+        import wx
+        import threading
+        
+        result_container = {"value": None, "done": False}
+        
+        def show_dialog():
+            try:
+                dlg = wx.TextEntryDialog(
+                    None,
+                    "Enter new branch name:",
+                    "Create New Branch",
+                    "feature/new-feature"  # Default value
+                )
+                dlg.SetSize(wx.Size(400, 150))
+                
+                if dlg.ShowModal() == wx.ID_OK:
+                    branch_name = dlg.GetValue().strip()
+                    result_container["value"] = branch_name if branch_name else "feature/new-feature"
+                else:
+                    result_container["value"] = None  # User cancelled
+                dlg.Destroy()
+            except Exception as e:
+                print(f"❌ Error showing GUI dialog: {e}")
+                result_container["value"] = "feature/new-feature"  # Fallback
+            finally:
+                result_container["done"] = True
+        
+        # Check if we're on the main thread using threading
+        try:
+            main_thread = threading.main_thread()
+            current_thread = threading.current_thread()
+            
+            if current_thread == main_thread:
+                return GitOperations._get_branch_name_gui()
+            else:
+                # Use CallAfter to execute on main thread
+                wx.CallAfter(show_dialog)
+                
+                # Wait for dialog to complete
+                while not result_container["done"]:
+                    threading.Event().wait(0.1)
+                
+                return result_container["value"]
+        except:
+            # Fallback if wx not available or other issues
+            return GitOperations._get_branch_name_gui()
+
+    @staticmethod
     def quick_commit_push(app=None):
         """
         Execute git add, commit, and push in sequence.
@@ -1036,6 +1125,169 @@ class GitOperations:
         print("   • Pull latest changes: git pull origin main")
 
 
+    @staticmethod
+    def create_new_branch(app=None):
+        """
+        Create a new branch, add all changes, commit, and push with upstream tracking.
+        
+        Args:
+            app: TermTools app instance (used to detect GUI mode)
+        """
+        print("\n🌿 Create New Branch")
+        print("="*60)
+        
+        # Check if we're in a git repository
+        try:
+            result = subprocess.run(
+                ['git', 'rev-parse', '--git-dir'],
+                capture_output=True,
+                text=True,
+                check=False
+            , **_get_subprocess_flags())
+            if result.returncode != 0:
+                print("❌ Not a git repository. Please initialize git first.")
+                print("   Use: git init")
+                print("   Then, add a remote repository with:")
+                print("   git remote add origin <remote_repository_url>")
+                print("   Then run this command again")
+                return
+        except FileNotFoundError:
+            print("❌ Git is not installed or not in PATH.")
+            return
+        
+        # Get branch name from user
+        branch_name = GitOperations._get_branch_name_input(app)
+        if branch_name is None:  # User cancelled
+            print("❌ Operation cancelled.")
+            return
+        
+        # Get commit message from user
+        commit_message = GitOperations._get_commit_message_input(app)
+        if commit_message is None:  # User cancelled
+            print("❌ Operation cancelled.")
+            return
+        
+        print(f"\n🎯 Branch name: '{branch_name}'")
+        print(f"🎯 Commit message: '{commit_message}'")
+        
+        # Show the exact commands that will be executed
+        commands = [
+            f"git checkout -b {branch_name}",
+            "git add .",
+            f"git commit -m \"{commit_message}\"",
+            f"git push -u origin {branch_name}"
+        ]
+        
+        print("\n🔍 Commands that will be executed:")
+        for i, cmd in enumerate(commands, 1):
+            print(f"   {i}. {cmd}")
+        
+        # Get confirmation from user
+        confirmation_message = (
+            f"You are about to create a new branch and push it:\n\n"
+            f"Branch name: {branch_name}\n"
+            f"Commit message: {commit_message}\n\n"
+            f"Commands to execute:\n" +
+            "\n".join(f"{i}. {cmd}" for i, cmd in enumerate(commands, 1)) +
+            "\n\nDo you want to proceed?"
+        )
+        if not GitOperations._get_confirmation(confirmation_message, "Create New Branch Confirmation", app):
+            print("❌ Operation cancelled.")
+            return
+        
+        # Step 1: Create and checkout new branch
+        print(f"\n🌿 Step 1/4: Creating and checking out branch '{branch_name}'...")
+        try:
+            result = subprocess.run(
+                ['git', 'checkout', '-b', branch_name],
+                capture_output=True,
+                text=True,
+                check=True
+            , **_get_subprocess_flags())
+            print(f"✅ Branch '{branch_name}' created and checked out")
+            if result.stdout:
+                print(f"   {result.stdout.strip()}")
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Error creating branch: {e}")
+            if e.stderr:
+                print(f"   {e.stderr.strip()}")
+            return
+        
+        # Step 2: Add all changes
+        print("\n📦 Step 2/4: Adding all changes...")
+        try:
+            result = subprocess.run(
+                ['git', 'add', '.'],
+                capture_output=True,
+                text=True,
+                check=True
+            , **_get_subprocess_flags())
+            print("✅ All changes added to staging")
+            if result.stdout:
+                print(f"   {result.stdout.strip()}")
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Error adding changes: {e}")
+            if e.stderr:
+                print(f"   {e.stderr.strip()}")
+            return
+        
+        # Step 3: Commit changes
+        print(f"\n💾 Step 3/4: Committing with message '{commit_message}'...")
+        try:
+            result = subprocess.run(
+                ['git', 'commit', '-m', commit_message],
+                capture_output=True,
+                text=True,
+                check=True
+            , **_get_subprocess_flags())
+            print("✅ Changes committed successfully")
+            if result.stdout:
+                print(f"   {result.stdout.strip()}")
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Error committing changes: {e}")
+            if e.stderr:
+                print(f"   {e.stderr.strip()}")
+            print("\n💡 Tip: Check if there are any changes to commit.")
+            print("   You can check with: git status")
+            return
+        
+        # Step 4: Push branch with upstream tracking
+        print(f"\n📤 Step 4/4: Pushing branch '{branch_name}' to remote...")
+        try:
+            result = subprocess.run(
+                ['git', 'push', '-u', 'origin', branch_name],
+                capture_output=True,
+                text=True,
+                check=True
+            , **_get_subprocess_flags())
+            print(f"✅ Branch '{branch_name}' pushed successfully with upstream tracking")
+            if result.stdout:
+                print(f"   {result.stdout.strip()}")
+            if result.stderr:
+                # Git push outputs to stderr even on success
+                print(f"   {result.stderr.strip()}")
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Error pushing branch: {e}")
+            if e.stderr:
+                print(f"   {e.stderr.strip()}")
+            print("\n💡 Tip: You may need to:")
+            print("   • Ensure the remote repository exists and is accessible")
+            print("   • Check your authentication credentials")
+            print("   • Manually push later with: git push -u origin {branch_name}")
+            # Don't return here - we still want to show the summary
+        
+        print("\n" + "="*60)
+        print("🎉 New branch created and pushed successfully!")
+        print("📋 Summary:")
+        print(f"   • New branch '{branch_name}' created and checked out")
+        print(f"   • All changes committed with message: '{commit_message}'")
+        print(f"   • Branch pushed to remote with upstream tracking")
+        print("\n💡 Next steps:")
+        print(f"   • Switch back to main: git checkout main")
+        print(f"   • View all branches: git branch -a")
+        print(f"   • Delete branch later if needed: git branch -d {branch_name}")
+
+
 # Register menu items using the blueprint route decorator
 @git_operations_bp.route(
     "1",
@@ -1074,11 +1326,23 @@ def git_switch_repo(app=None):
 
 
 @git_operations_bp.route(
+    "1.3",
+    "Create New Branch",
+    "Create new branch, commit and push with upstream tracking",
+    "🔧 GIT OPERATIONS",
+    order=4
+)
+def git_create_new_branch(app=None):
+    """Menu handler for creating new branch"""
+    GitOperations.create_new_branch(app)
+
+
+@git_operations_bp.route(
     "1.5", 
     "Untrack, Commit & Push",
     "Remove files/folders from Git tracking",
     "🔧 GIT OPERATIONS",
-    order=4
+    order=5
 )
 def git_untrack_commit_push(app=None):
     """Menu handler for untrack, commit and push"""
