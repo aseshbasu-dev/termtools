@@ -42,77 +42,33 @@ class GitOperations:
     def _get_commit_message_gui():
         """Get commit message via GUI dialog"""
         try:
-            import wx
+            from PyQt6.QtWidgets import QApplication, QInputDialog
             
-            # Create dialog for commit message input
-            dlg = wx.TextEntryDialog(
-                None,
-                "Enter commit message:",
-                "Git Commit Message",
-                "bug fixes"  # Default value
-            )
-            dlg.SetSize(wx.Size(400, 150))  # Make dialog wider for better text entry
-            
-            if dlg.ShowModal() == wx.ID_OK:
-                commit_message = dlg.GetValue().strip()
-                dlg.Destroy()
-                return commit_message if commit_message else "bug fixes"
+            if QApplication.instance():
+                text, ok = QInputDialog.getText(
+                    None,
+                    "Git Commit Message",
+                    "Enter commit message:",
+                    text="bug fixes"  # Default value
+                )
+                
+                if ok:
+                    commit_message = text.strip()
+                    return commit_message if commit_message else "bug fixes"
+                else:
+                    return None  # User cancelled
             else:
-                dlg.Destroy()
-                return None  # User cancelled
+                print("❌ GUI unavailable")
+                return "bug fixes"
         except Exception as e:
             print(f"❌ Error showing GUI dialog: {e}")
             return "bug fixes"  # Fallback to default message
     
     @staticmethod
     def _get_commit_message_gui_threadsafe():
-        """Thread-safe version using wx.CallAfter for GUI operations"""
-        import wx
-        import threading
-        
-        result_container = {"value": None, "done": False}
-        
-        def show_dialog():
-            try:
-                dlg = wx.TextEntryDialog(
-                    None,
-                    "Enter commit message:",
-                    "Git Commit Message",
-                    "bug fixes"  # Default value
-                )
-                dlg.SetSize(wx.Size(400, 150))
-                
-                if dlg.ShowModal() == wx.ID_OK:
-                    commit_message = dlg.GetValue().strip()
-                    result_container["value"] = commit_message if commit_message else "bug fixes"
-                else:
-                    result_container["value"] = None  # User cancelled
-                dlg.Destroy()
-            except Exception as e:
-                print(f"❌ Error showing GUI dialog: {e}")
-                result_container["value"] = "bug fixes"  # Fallback
-            finally:
-                result_container["done"] = True
-        
-        # Check if we're on the main thread using threading
-        try:
-            main_thread = threading.main_thread()
-            current_thread = threading.current_thread()
-            
-            if current_thread == main_thread:
-                return GitOperations._get_commit_message_gui()
-            else:
-                # Use CallAfter to execute on main thread
-                wx.CallAfter(show_dialog)
-                
-                # Wait for dialog to complete
-                while not result_container["done"]:
-                    threading.Event().wait(0.1)
-                
-                return result_container["value"]
-        except:
-            # Fallback if wx not available or other issues
-            return GitOperations._get_commit_message_gui()
+        """Thread-safe version for GUI operations - PyQt6 handles threading automatically"""
+        # PyQt6 handles thread safety automatically, just call the GUI method
+        return GitOperations._get_commit_message_gui()
     
     @staticmethod
     def _get_confirmation(message, title="Confirmation", app=None):
@@ -133,67 +89,30 @@ class GitOperations:
     def _get_confirmation_gui(message, title):
         """Get confirmation via GUI dialog"""
         try:
-            import wx
+            from PyQt6.QtWidgets import QApplication, QMessageBox
             
-            dlg = wx.MessageDialog(
-                None,
-                message,
-                title,
-                wx.YES_NO | wx.ICON_QUESTION
-            )
-            
-            result = dlg.ShowModal()
-            dlg.Destroy()
-            return result == wx.ID_YES
+            if QApplication.instance():
+                reply = QMessageBox.question(
+                    None,
+                    title,
+                    message,
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No
+                )
+                
+                return reply == QMessageBox.StandardButton.Yes
+            else:
+                print("❌ GUI unavailable")
+                return False
         except Exception as e:
             print(f"❌ Error showing GUI confirmation: {e}")
             return False  # Default to not confirming if error occurs
     
     @staticmethod
     def _get_confirmation_gui_threadsafe(message, title):
-        """Thread-safe version of confirmation dialog"""
-        import wx
-        import threading
-        
-        result_container = {"value": False, "done": False}
-        
-        def show_dialog():
-            try:
-                dlg = wx.MessageDialog(
-                    None,
-                    message,
-                    title,
-                    wx.YES_NO | wx.ICON_QUESTION
-                )
-                
-                result = dlg.ShowModal()
-                result_container["value"] = result == wx.ID_YES
-                dlg.Destroy()
-            except Exception as e:
-                print(f"❌ Error showing GUI confirmation: {e}")
-                result_container["value"] = False  # Default to not confirming
-            finally:
-                result_container["done"] = True
-        
-        # Check if we're on the main thread
-        try:
-            main_thread = threading.main_thread()
-            current_thread = threading.current_thread()
-            
-            if current_thread == main_thread:
-                return GitOperations._get_confirmation_gui(message, title)
-            else:
-                # Use CallAfter to execute on main thread
-                wx.CallAfter(show_dialog)
-                
-                # Wait for dialog to complete
-                while not result_container["done"]:
-                    threading.Event().wait(0.1)
-                
-                return result_container["value"]
-        except:
-            # Fallback
-            return GitOperations._get_confirmation_gui(message, title)
+        """Thread-safe version of confirmation dialog - PyQt6 handles threading automatically"""
+        # PyQt6 handles thread safety automatically, just call the GUI method
+        return GitOperations._get_confirmation_gui(message, title)
 
     @staticmethod
     def quick_commit_push(app=None):
@@ -310,6 +229,174 @@ class GitOperations:
         print("🎉 All operations completed successfully!")
 
     @staticmethod
+    def _get_branch_name_input(app=None):
+        """
+        Get branch name from user via GUI dialog.
+        Returns the branch name string or None if cancelled.
+        """
+        # PyQt6 handles threading automatically
+        return GitOperations._get_branch_name_input_gui()
+
+    @staticmethod
+    def _get_branch_name_input_gui():
+        """Show branch name dialog using PyQt6."""
+        try:
+            from PyQt6.QtWidgets import QApplication, QInputDialog
+            
+            if QApplication.instance():
+                text, ok = QInputDialog.getText(
+                    None,
+                    "Create & Switch Branch",
+                    "Enter new branch name:",
+                    text="feature/your-branch"
+                )
+                
+                if ok:
+                    val = text.strip()
+                    return val if val else None
+                else:
+                    return None
+            else:
+                print("❌ GUI unavailable")
+                return None
+        except Exception as e:
+            print(f"❌ Error showing branch name dialog: {e}")
+            return None
+
+    @staticmethod
+    def create_branch_and_push(app=None):
+        """
+        Create a new branch, commit changes and push with upstream tracking.
+
+        Commands displayed and executed:
+        git checkout -b <branch>
+        git add .
+        git commit -m "<commit>"
+        git push -u origin <branch>
+        """
+        print("\n🔧 Create & Switch Branch")
+        print("="*60)
+
+        # Ensure git repo
+        try:
+            result = subprocess.run(
+                ['git', 'rev-parse', '--git-dir'],
+                capture_output=True,
+                text=True,
+                check=False
+            , **_get_subprocess_flags())
+            if result.returncode != 0:
+                print("❌ Not a git repository. Please initialize git first.")
+                return
+        except FileNotFoundError:
+            print("❌ Git is not installed or not in PATH.")
+            return
+
+        # Get branch name
+        branch_name = GitOperations._get_branch_name_input(app)
+        if branch_name is None:
+            print("❌ Operation cancelled (no branch name provided).")
+            return
+
+        # Get first commit message
+        commit_message = GitOperations._get_commit_message_input(app)
+        if commit_message is None:
+            print("❌ Operation cancelled.")
+            return
+
+        # Show commands that will be executed
+        confirmation_message = (
+            f"You are about to execute the following Git commands:\n\n"
+            f"1. git checkout -b {branch_name}\n"
+            f"2. git add .\n"
+            f"3. git commit -m \"{commit_message}\"\n"
+            f"4. git push -u origin {branch_name}\n\n"
+            f"Do you want to proceed?"
+        )
+
+        if not GitOperations._get_confirmation(confirmation_message, "Create & Switch Branch Confirmation", app):
+            print("❌ Operation cancelled by user.")
+            return
+
+        # Step 1: git checkout -b <branch>
+        print("\n📦 Step 1/4: Creating and switching to branch...")
+        try:
+            subprocess.run(
+                ['git', 'checkout', '-b', branch_name],
+                capture_output=True,
+                text=True,
+                check=True
+            , **_get_subprocess_flags())
+            print(f"✅ Switched to new branch '{branch_name}'")
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Error creating/switching branch: {e}")
+            if e.stderr:
+                print(f"   {e.stderr.strip()}")
+            return
+
+        # Step 2: git add .
+        print("\n📦 Step 2/4: Adding all changes...")
+        try:
+            subprocess.run(
+                ['git', 'add', '.'],
+                capture_output=True,
+                text=True,
+                check=True
+            , **_get_subprocess_flags())
+            print("✅ All changes staged successfully")
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Error staging changes: {e}")
+            if e.stderr:
+                print(f"   {e.stderr.strip()}")
+            return
+
+        # Step 3: git commit
+        print("\n💾 Step 3/4: Committing changes...")
+        try:
+            result = subprocess.run(
+                ['git', 'commit', '-m', commit_message],
+                capture_output=True,
+                text=True,
+                check=True
+            , **_get_subprocess_flags())
+            print(f"✅ Changes committed successfully")
+            if result.stdout:
+                print(f"   {result.stdout.strip()}")
+        except subprocess.CalledProcessError as e:
+            if "nothing to commit" in (e.stdout or ""):
+                print("ℹ️  Nothing to commit (working tree clean)")
+                print("   Skipping push operation.")
+                return
+            else:
+                print(f"❌ Error committing changes: {e}")
+                if e.stderr:
+                    print(f"   {e.stderr.strip()}")
+                return
+
+        # Step 4: git push -u origin <branch>
+        print("\n🚀 Step 4/4: Pushing to remote and setting upstream...")
+        try:
+            result = subprocess.run(
+                ['git', 'push', '-u', 'origin', branch_name],
+                capture_output=True,
+                text=True,
+                check=True
+            , **_get_subprocess_flags())
+            print("✅ Branch pushed and upstream set successfully!")
+            if result.stdout:
+                print(f"   {result.stdout.strip()}")
+            if result.stderr:
+                print(f"   {result.stderr.strip()}")
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Error pushing branch: {e}")
+            if e.stderr:
+                print(f"   {e.stderr.strip()}")
+            return
+
+        print("\n" + "="*60)
+        print(f"🎉 Branch '{branch_name}' created, committed and pushed.")
+
+    @staticmethod
     def _get_repo_url_input(app=None):
         """
         Get repository URL from user via GUI dialog.
@@ -326,7 +413,7 @@ class GitOperations:
     def _get_repo_url_input_gui():
         """Get repository URL via GUI dialog"""
         try:
-            import wx
+            from PyQt6.QtWidgets import QApplication, QInputDialog
             
             instructions = (
                 "Enter your Git repository URL.\n\n"
@@ -336,83 +423,31 @@ class GitOperations:
                 "Example: https://github.com/aseshbasu-dev/termtools.git"
             )
             
-            # Create dialog for repository URL input
-            dlg = wx.TextEntryDialog(
-                None,
-                instructions,
-                "Git Repository URL",
-                ""  # Empty default value
-            )
-            dlg.SetSize(wx.Size(550, 250))  # Make dialog larger for instructions
-            
-            if dlg.ShowModal() == wx.ID_OK:
-                repo_url = dlg.GetValue().strip()
-                dlg.Destroy()
-                return repo_url if repo_url else None
+            if QApplication.instance():
+                text, ok = QInputDialog.getText(
+                    None,
+                    "Git Repository URL",
+                    instructions,
+                    text=""  # Empty default value
+                )
+                
+                if ok:
+                    repo_url = text.strip()
+                    return repo_url if repo_url else None
+                else:
+                    return None  # User cancelled
             else:
-                dlg.Destroy()
-                return None  # User cancelled
+                print("❌ GUI unavailable")
+                return None
         except Exception as e:
             print(f"❌ Error showing GUI dialog: {e}")
             return None
     
     @staticmethod
     def _get_repo_url_input_gui_threadsafe():
-        """Thread-safe version using wx.CallAfter for GUI operations"""
-        import wx
-        import threading
-        
-        result_container = {"value": None, "done": False}
-        
-        def show_dialog():
-            try:
-                instructions = (
-                    "Enter your Git repository URL.\n\n"
-                    "Repository URL formats:\n"
-                    "• HTTPS: https://github.com/username/repository.git\n"
-                    "• SSH:   git@github.com:username/repository.git\n\n"
-                    "Example: https://github.com/aseshbasu-dev/termtools.git"
-                )
-                
-                dlg = wx.TextEntryDialog(
-                    None,
-                    instructions,
-                    "Git Repository URL",
-                    ""  # Empty default value
-                )
-                dlg.SetSize(wx.Size(550, 250))
-                
-                if dlg.ShowModal() == wx.ID_OK:
-                    repo_url = dlg.GetValue().strip()
-                    result_container["value"] = repo_url if repo_url else None
-                else:
-                    result_container["value"] = None  # User cancelled
-                dlg.Destroy()
-            except Exception as e:
-                print(f"❌ Error showing GUI dialog: {e}")
-                result_container["value"] = None
-            finally:
-                result_container["done"] = True
-        
-        # Check if we're on the main thread using threading
-        try:
-            main_thread = threading.main_thread()
-            current_thread = threading.current_thread()
-            
-            if current_thread == main_thread:
-                return GitOperations._get_repo_url_input_gui()
-            else:
-                # Use CallAfter to execute on main thread
-                wx.CallAfter(show_dialog)
-                
-                # Wait for dialog to complete
-                while not result_container["done"]:
-                    threading.Event().wait(0.1)
-                
-                return result_container["value"]
-        except:
-            # Fallback if wx not available or other issues
-            return GitOperations._get_repo_url_input_gui()
+        """Thread-safe version - PyQt6 handles threading automatically"""
+        # PyQt6 handles thread safety automatically, just call the GUI method
+        return GitOperations._get_repo_url_input_gui()
 
     @staticmethod
     def _get_untrack_input(app=None):
@@ -431,77 +466,33 @@ class GitOperations:
     def _get_untrack_input_gui():
         """Get files/folders to untrack via GUI dialog"""
         try:
-            import wx
+            from PyQt6.QtWidgets import QApplication, QInputDialog
             
-            # Create dialog for files/folders input
-            dlg = wx.TextEntryDialog(
-                None,
-                "Enter files/folders to untrack (separate with spaces):\n\nExample: .github .vscode __pycache__ temp.txt",
-                "Git Untrack Files/Folders",
-                ""  # Empty default value
-            )
-            dlg.SetSize(wx.Size(500, 180))  # Make dialog wider for better text entry
-            
-            if dlg.ShowModal() == wx.ID_OK:
-                untrack_input = dlg.GetValue().strip()
-                dlg.Destroy()
-                return untrack_input if untrack_input else None
+            if QApplication.instance():
+                text, ok = QInputDialog.getText(
+                    None,
+                    "Git Untrack Files/Folders",
+                    "Enter files/folders to untrack (separate with spaces):\n\nExample: .github .vscode __pycache__ temp.txt",
+                    text=""  # Empty default value
+                )
+                
+                if ok:
+                    untrack_input = text.strip()
+                    return untrack_input if untrack_input else None
+                else:
+                    return None  # User cancelled
             else:
-                dlg.Destroy()
-                return None  # User cancelled
+                print("❌ GUI unavailable")
+                return None
         except Exception as e:
             print(f"❌ Error showing GUI dialog: {e}")
             return None
     
     @staticmethod
     def _get_untrack_input_gui_threadsafe():
-        """Thread-safe version using wx.CallAfter for GUI operations"""
-        import wx
-        import threading
-        
-        result_container = {"value": None, "done": False}
-        
-        def show_dialog():
-            try:
-                dlg = wx.TextEntryDialog(
-                    None,
-                    "Enter files/folders to untrack (separate with spaces):\n\nExample: .github .vscode __pycache__ temp.txt",
-                    "Git Untrack Files/Folders",
-                    ""  # Empty default value
-                )
-                dlg.SetSize(wx.Size(500, 180))
-                
-                if dlg.ShowModal() == wx.ID_OK:
-                    untrack_input = dlg.GetValue().strip()
-                    result_container["value"] = untrack_input if untrack_input else None
-                else:
-                    result_container["value"] = None  # User cancelled
-                dlg.Destroy()
-            except Exception as e:
-                print(f"❌ Error showing GUI dialog: {e}")
-                result_container["value"] = None
-            finally:
-                result_container["done"] = True
-        
-        # Check if we're on the main thread using threading
-        try:
-            main_thread = threading.main_thread()
-            current_thread = threading.current_thread()
-            
-            if current_thread == main_thread:
-                return GitOperations._get_untrack_input_gui()
-            else:
-                # Use CallAfter to execute on main thread
-                wx.CallAfter(show_dialog)
-                
-                # Wait for dialog to complete
-                while not result_container["done"]:
-                    threading.Event().wait(0.1)
-                
-                return result_container["value"]
-        except:
-            # Fallback if wx not available or other issues
-            return GitOperations._get_untrack_input_gui()
+        """Thread-safe version - PyQt6 handles threading automatically"""
+        # PyQt6 handles thread safety automatically, just call the GUI method
+        return GitOperations._get_untrack_input_gui()
 
     @staticmethod
     def untrack_commit_push(app=None):
@@ -869,6 +860,213 @@ class GitOperations:
         print(f"   • Branch 'main' is now tracking 'origin/main'")
 
     @staticmethod
+    def show_status(app=None):
+        """
+        Display the current git status of the repository.
+        Shows modified files, staged files, untracked files, and current branch.
+        
+        Args:
+            app: TermTools app instance
+        """
+        print("\n🔧 Git Status")
+        print("="*60)
+        
+        # Check if git is available
+        try:
+            subprocess.run(
+                ['git', '--version'],
+                capture_output=True,
+                text=True,
+                check=True
+            , **_get_subprocess_flags())
+        except FileNotFoundError:
+            print("❌ Git is not installed or not in PATH.")
+            return
+        except subprocess.CalledProcessError:
+            print("❌ Error checking Git installation.")
+            return
+        
+        # Check if we're in a git repository
+        try:
+            result = subprocess.run(
+                ['git', 'rev-parse', '--git-dir'],
+                capture_output=True,
+                text=True,
+                check=False
+            , **_get_subprocess_flags())
+            if result.returncode != 0:
+                print("❌ Not a git repository.")
+                print("   Use 'Initialize Git Repo' to set up git in this folder.")
+                return
+        except Exception as e:
+            print(f"❌ Error checking repository status: {e}")
+            return
+        
+        # Get current branch
+        print("\n📌 Current Branch:")
+        try:
+            result = subprocess.run(
+                ['git', 'branch', '--show-current'],
+                capture_output=True,
+                text=True,
+                check=True
+            , **_get_subprocess_flags())
+            current_branch = result.stdout.strip()
+            if current_branch:
+                print(f"   🌿 {current_branch}")
+            else:
+                print("   ⚠️  Detached HEAD state")
+        except subprocess.CalledProcessError as e:
+            print(f"   ❌ Error getting branch: {e.stderr.strip() if e.stderr else str(e)}")
+        
+        # Get remote information
+        print("\n🌐 Remote Repository:")
+        try:
+            result = subprocess.run(
+                ['git', 'remote', '-v'],
+                capture_output=True,
+                text=True,
+                check=True
+            , **_get_subprocess_flags())
+            if result.stdout:
+                remotes = {}
+                for line in result.stdout.strip().split('\n'):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        name = parts[0]
+                        url = parts[1]
+                        if name not in remotes:
+                            remotes[name] = url
+                
+                for name, url in remotes.items():
+                    print(f"   📡 {name}: {url}")
+            else:
+                print("   ⚠️  No remote repositories configured")
+        except subprocess.CalledProcessError:
+            print("   ⚠️  No remote repositories configured")
+        
+        # Get git status
+        print("\n📊 Repository Status:")
+        try:
+            result = subprocess.run(
+                ['git', 'status', '--porcelain'],
+                capture_output=True,
+                text=True,
+                check=True
+            , **_get_subprocess_flags())
+            
+            if result.stdout.strip():
+                # Parse the status output
+                staged_files = []
+                modified_files = []
+                untracked_files = []
+                deleted_files = []
+                
+                for line in result.stdout.strip().split('\n'):
+                    if not line:
+                        continue
+                    
+                    status = line[:2]
+                    filename = line[3:].strip()
+                    
+                    # Check status codes
+                    if status[0] in ['A', 'M', 'D', 'R', 'C']:
+                        staged_files.append((status[0], filename))
+                    if status[1] == 'M':
+                        modified_files.append(filename)
+                    elif status[1] == 'D':
+                        deleted_files.append(filename)
+                    if status == '??':
+                        untracked_files.append(filename)
+                
+                # Display categorized files
+                if staged_files:
+                    print("\n   ✅ Staged files (ready to commit):")
+                    for status_code, filename in staged_files:
+                        status_symbol = {
+                            'A': '➕',  # Added
+                            'M': '✏️',  # Modified
+                            'D': '🗑️',  # Deleted
+                            'R': '📝',  # Renamed
+                            'C': '📋'   # Copied
+                        }.get(status_code, '•')
+                        print(f"      {status_symbol} {filename}")
+                
+                if modified_files:
+                    print("\n   📝 Modified files (not staged):")
+                    for filename in modified_files:
+                        print(f"      ✏️  {filename}")
+                
+                if deleted_files:
+                    print("\n   🗑️  Deleted files (not staged):")
+                    for filename in deleted_files:
+                        print(f"      ❌ {filename}")
+                
+                if untracked_files:
+                    print("\n   ❓ Untracked files:")
+                    for filename in untracked_files:
+                        print(f"      📄 {filename}")
+                
+                # Summary count
+                total_changes = len(staged_files) + len(modified_files) + len(deleted_files) + len(untracked_files)
+                print(f"\n   📊 Total: {total_changes} file(s) with changes")
+                
+            else:
+                print("   ✅ Working tree clean - no changes detected")
+        except subprocess.CalledProcessError as e:
+            print(f"   ❌ Error getting status: {e}")
+            if e.stderr:
+                print(f"      {e.stderr.strip()}")
+        
+        # Get last commit info
+        print("\n💾 Last Commit:")
+        try:
+            result = subprocess.run(
+                ['git', 'log', '-1', '--oneline'],
+                capture_output=True,
+                text=True,
+                check=True
+            , **_get_subprocess_flags())
+            if result.stdout.strip():
+                print(f"   📌 {result.stdout.strip()}")
+            else:
+                print("   ⚠️  No commits yet")
+        except subprocess.CalledProcessError:
+            print("   ⚠️  No commits yet")
+        
+        # Get ahead/behind info
+        print("\n🔄 Sync Status:")
+        try:
+            result = subprocess.run(
+                ['git', 'rev-list', '--left-right', '--count', 'HEAD...@{u}'],
+                capture_output=True,
+                text=True,
+                check=False
+            , **_get_subprocess_flags())
+            
+            if result.returncode == 0 and result.stdout.strip():
+                ahead, behind = result.stdout.strip().split()
+                ahead, behind = int(ahead), int(behind)
+                
+                if ahead > 0 and behind > 0:
+                    print(f"   ⚠️  Branch diverged: {ahead} commit(s) ahead, {behind} commit(s) behind remote")
+                elif ahead > 0:
+                    print(f"   ⬆️  {ahead} commit(s) ahead of remote (need to push)")
+                elif behind > 0:
+                    print(f"   ⬇️  {behind} commit(s) behind remote (need to pull)")
+                else:
+                    print("   ✅ Up to date with remote")
+            else:
+                print("   ⚠️  No upstream branch configured")
+        except subprocess.CalledProcessError:
+            print("   ⚠️  No upstream branch configured")
+        except Exception as e:
+            print(f"   ⚠️  Could not determine sync status: {e}")
+        
+        print("\n" + "="*60)
+        print("💡 Tip: Use 'Quick Commit & Push' to commit and push changes")
+
+    @staticmethod
     def switch_repo(app=None):
         """
         Switch to a new remote repository URL.
@@ -1062,6 +1260,18 @@ def git_quick_commit_push(app=None):
 
 
 @git_operations_bp.route(
+    "1.4",
+    "Show Git Status",
+    "Display current repository status",
+    "🔧 GIT OPERATIONS",
+    order=4
+)
+def git_show_status(app=None):
+    """Menu handler for showing git status"""
+    GitOperations.show_status(app)
+
+
+@git_operations_bp.route(
     "1.2",
     "Switch Repository",
     "Change remote repository URL",
@@ -1083,6 +1293,18 @@ def git_switch_repo(app=None):
 def git_untrack_commit_push(app=None):
     """Menu handler for untrack, commit and push"""
     GitOperations.untrack_commit_push(app)
+
+
+@git_operations_bp.route(
+    "1.3",
+    "Create & Switch Branch",
+    "Create a new branch, commit and push (set upstream)",
+    "🔧 GIT OPERATIONS",
+    order=3
+)
+def git_create_and_switch_branch(app=None):
+    """Menu handler for creating and switching to a new branch"""
+    GitOperations.create_branch_and_push(app)
 
 
 # Initialize the module

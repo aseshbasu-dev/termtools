@@ -29,6 +29,8 @@ TermTools uses a modular blueprint architecture inspired by Flask, allowing for 
 - Windows OS (required)
 - Administrator privileges (auto-elevation supported)
 - Internet connection for download (required)
+- Python 3.8+ (will be installed automatically if not present)
+- Git for Windows (will be installed automatically if not present - required for Git operations)
 
 Open PowerShell as Administrator and run:
 
@@ -37,9 +39,12 @@ Open PowerShell as Administrator and run:
 ```
 
 **What this installer does:**
+
 - ✅ Checks for administrator privileges (auto-elevates if needed)
+- ✅ Installs Python 3.12.7 if not present
+- ✅ Installs Git for Windows if not present (required for Git operations)
 - ✅ Downloads TermTools from GitHub to `C:\Program Files\BasusTools\TermTools\`
-- ✅ Creates a virtual environment and installs dependencies
+- ✅ Creates a virtual environment and installs dependencies (wxPython, etc.)
 - ✅ Sets up Windows context menu integration
 - ✅ Cleans up temporary files automatically
 

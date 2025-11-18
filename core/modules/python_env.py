@@ -20,11 +20,13 @@ def _get_subprocess_flags():
     return {}
 
 
-# Import wx for GUI confirmations
+# Import PyQt6 for GUI confirmations
 try:
-    import wx
+    from PyQt6.QtWidgets import QApplication, QMessageBox, QInputDialog
 except ImportError:
-    wx = None
+    QApplication = None
+    QMessageBox = None
+    QInputDialog = None
 
 # Create the blueprint for Python environment management
 python_env_bp = Blueprint("python_env", "Python environment and dependency management")
@@ -38,16 +40,15 @@ class PythonEnvironment:
         """Show GUI confirmation dialog, fail with comprehensive error if GUI unavailable"""
         try:
             # Check if we're in a GUI environment by trying to create a dialog
-            if wx and wx.GetApp():
-                dlg = wx.MessageDialog(
-                    None,  # Use None as parent, wx will find appropriate parent
-                    message,
+            if QApplication and QApplication.instance():
+                reply = QMessageBox.question(
+                    None,  # Use None as parent
                     title,
-                    wx.YES_NO | wx.ICON_QUESTION | wx.NO_DEFAULT
+                    message,
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No
                 )
-                result = dlg.ShowModal()
-                dlg.Destroy()
-                return result == wx.ID_YES
+                return reply == QMessageBox.StandardButton.Yes
             else:
                 PythonEnvironment._show_gui_unavailable_error("confirmation dialog", message, title)
                 return False
@@ -66,21 +67,19 @@ class PythonEnvironment:
         """Show GUI choice dialog, fail with comprehensive error if GUI unavailable"""
         try:
             # Check if we're in a GUI environment
-            if wx and wx.GetApp():
-                dlg = wx.SingleChoiceDialog(
+            if QApplication and QApplication.instance():
+                item, ok = QInputDialog.getItem(
                     None,
-                    message,
                     title,
-                    choices
+                    message,
+                    choices,
+                    default_choice,
+                    False
                 )
-                dlg.SetSelection(default_choice)
                 
-                if dlg.ShowModal() == wx.ID_OK:
-                    selection = dlg.GetSelection()
-                    dlg.Destroy()
-                    return selection
+                if ok and item:
+                    return choices.index(item)
                 else:
-                    dlg.Destroy()
                     return -1  # Cancelled
             else:
                 PythonEnvironment._show_gui_unavailable_error("choice dialog", message, title, choices)
@@ -111,8 +110,8 @@ class PythonEnvironment:
         print(f"**Component**: Python Environment Module")
         print(f"**OS**: Windows")
         print(f"**Python Version**: {__import__('sys').version}")
-        print(f"**wxPython Available**: {'Yes' if wx else 'No'}")
-        print(f"**wx.GetApp() Result**: {bool(wx.GetApp()) if wx else 'N/A'}")
+        print(f"**PyQt6 Available**: {'Yes' if QApplication else 'No'}")
+        print(f"**QApplication.instance() Result**: {bool(QApplication.instance()) if QApplication else 'N/A'}")
         print(f"**Dialog Type**: {dialog_type}")
         print(f"**Dialog Title**: {title}")
         print(f"**Dialog Message**: {message}")
@@ -142,8 +141,8 @@ class PythonEnvironment:
         print(f"**Component**: Python Environment Module")
         print(f"**OS**: Windows")
         print(f"**Python Version**: {__import__('sys').version}")
-        print(f"**wxPython Available**: {'Yes' if wx else 'No'}")
-        print(f"**wx.GetApp() Result**: {bool(wx.GetApp()) if wx else 'N/A'}")
+        print(f"**PyQt6 Available**: {'Yes' if QApplication else 'No'}")
+        print(f"**QApplication.instance() Result**: {bool(QApplication.instance()) if QApplication else 'N/A'}")
         print(f"**Dialog Type**: {dialog_type}")
         print(f"**Dialog Title**: {title}")
         print(f"**Dialog Message**: {message}")

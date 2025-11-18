@@ -30,18 +30,17 @@ class ProjectTemplates:
             if project_path.exists():
                 # Use GUI confirmation dialog
                 try:
-                    import wx
-                    if wx.GetApp():
-                        dlg = wx.MessageDialog(
+                    from PyQt6.QtWidgets import QApplication, QMessageBox
+                    if QApplication.instance():
+                        reply = QMessageBox.question(
                             None,
-                            f"Directory '{project_name}' already exists. Overwrite?",
                             "Directory Exists",
-                            wx.YES_NO | wx.ICON_QUESTION | wx.NO_DEFAULT
+                            f"Directory '{project_name}' already exists. Overwrite?",
+                            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                            QMessageBox.StandardButton.No
                         )
-                        result = dlg.ShowModal()
-                        dlg.Destroy()
                         
-                        if result != wx.ID_YES:
+                        if reply != QMessageBox.StandardButton.Yes:
                             print("❌ Operation cancelled.")
                             return
                     else:
@@ -516,32 +515,30 @@ def create_flask_project_scaffold(app=None):
     # Get project name from user via GUI
     project_name = None
     try:
-        import wx
-        if wx.GetApp():
-            dlg = wx.TextEntryDialog(
+        from PyQt6.QtWidgets import QApplication, QInputDialog, QMessageBox
+        
+        if QApplication.instance():
+            text, ok = QInputDialog.getText(
                 None,
-                "Enter project name:",
                 "Flask Project Scaffold",
-                "flask_project"  # Default value
+                "Enter project name:",
+                text="flask_project"  # Default value
             )
-            dlg.SetSize(wx.Size(400, 150))
             
-            if dlg.ShowModal() == wx.ID_OK:
-                project_name = dlg.GetValue().strip()
+            if ok:
+                project_name = text.strip()
                 if not project_name:
                     project_name = "flask_project"
-                dlg.Destroy()
                 
                 # Validate project name
                 if not project_name.replace('_', '').replace('-', '').isalnum():
-                    wx.MessageBox(
-                        "Project name should contain only letters, numbers, underscores, and hyphens.",
+                    QMessageBox.critical(
+                        None,
                         "Invalid Project Name",
-                        wx.OK | wx.ICON_ERROR
+                        "Project name should contain only letters, numbers, underscores, and hyphens."
                     )
                     return
             else:
-                dlg.Destroy()
                 print("❌ Operation cancelled.")
                 return
         else:

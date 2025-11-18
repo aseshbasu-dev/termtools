@@ -19,11 +19,11 @@ def main():
     try:
         # Run in GUI mode
         try:
-            from core.wx_app import run_wx_app
-            run_wx_app()
+            from core.qt_app import run_qt_app
+            run_qt_app()
         except ImportError as e:
-            print(f"❌ Error: wxPython is not installed.")
-            print(f"   Please install it using: pip install wxPython")
+            print(f"❌ Error: PyQt6 is not installed.")
+            print(f"   Please install it using: pip install PyQt6")
             print(f"\n   Technical details: {e}")
             sys.exit(1)
     except ImportError as e:

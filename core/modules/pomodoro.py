@@ -7,7 +7,12 @@ customizable time intervals, and statistics tracking. The timer runs in a
 separate window and automatically loops through work and break periods.
 """
 
-import wx
+from PyQt6.QtWidgets import (
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
+    QLabel, QComboBox, QTextEdit, QMessageBox, QInputDialog, QApplication
+)
+from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
+from PyQt6.QtGui import QFont, QPalette, QColor
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -74,7 +79,6 @@ class PomodoroStats:
         stats["total_work_sessions"] = stats.get("total_work_sessions", 0) + 1
         stats["total_work_minutes"] = stats.get("total_work_minutes", 0) + minutes
         
-        # Track by date
         today = datetime.now().strftime("%Y-%m-%d")
         if "sessions_by_date" not in stats:
             stats["sessions_by_date"] = {}
@@ -96,7 +100,6 @@ class PomodoroStats:
         stats = self._load_stats()
         stats["total_break_minutes"] = stats.get("total_break_minutes", 0) + minutes
         
-        # Track by date
         today = datetime.now().strftime("%Y-%m-%d")
         if "sessions_by_date" not in stats:
             stats["sessions_by_date"] = {}
@@ -148,54 +151,33 @@ class SoundNotifier:
     
     @staticmethod
     def play_completion_sound(session_type="work"):
-        """
-        Play a completion sound notification
-        
-        Args:
-            session_type: "work" or "break" to determine sound pattern
-        """
+        """Play a completion sound notification"""
         try:
             if os.name == 'nt':  # Windows
-                # Play different patterns for work vs break completion
                 if session_type == "work":
-                    # Work complete: Triumphant ascending melody (5 notes)
-                    # Longer duration for more noticeable alert
-                    frequencies = [523, 659, 784, 988, 1175]  # C, E, G, B, D (major scale pattern)
+                    frequencies = [523, 659, 784, 988, 1175]
                     for freq in frequencies:
-                        winsound.Beep(freq, 250)  # frequency, duration in ms
+                        winsound.Beep(freq, 250)
                         time.sleep(0.05)
-                    # Final triumphant chord-like effect
-                    winsound.Beep(1319, 500)  # High E, longer duration
+                    winsound.Beep(1319, 500)
                 else:
-                    # Break complete: Gentle chime pattern (3 notes)
-                    # Calming descending tones
-                    frequencies = [880, 698, 523]  # A, F, C (relaxing pattern)
+                    frequencies = [880, 698, 523]
                     for freq in frequencies:
                         winsound.Beep(freq, 350)
                         time.sleep(0.1)
             else:
-                # Unix/Linux/Mac: Use system bell multiple times
+                # Unix/Linux/Mac: Use system bell
                 bell_count = 5 if session_type == "work" else 3
                 for _ in range(bell_count):
-                    wx.Bell()
+                    QApplication.beep()
                     time.sleep(0.2)
                     
         except Exception as e:
-            # Fallback to wx.Bell if sound fails
             print(f"⚠️ Sound notification failed: {e}")
-            wx.Bell()
-    
-    @staticmethod
-    def play_tick_sound():
-        """Play a subtle tick sound (for last minute countdown if needed)"""
-        try:
-            if os.name == 'nt':
-                winsound.Beep(600, 100)  # Short, low beep
-        except Exception:
-            pass  # Silent failure for tick sounds
+            QApplication.beep()
 
 
-class PomodoroTimer(wx.Frame):
+class PomodoroTimer(QMainWindow):
     """Pomodoro timer window with work/break sessions"""
     
     # Class variable to track if an instance is already open
@@ -204,28 +186,25 @@ class PomodoroTimer(wx.Frame):
     def __init__(self, parent=None):
         # Prevent multiple instances
         if PomodoroTimer._instance is not None:
-            # Bring existing window to front
-            if PomodoroTimer._instance.IsShown():
-                PomodoroTimer._instance.Raise()
-                PomodoroTimer._instance.RequestUserAttention()
+            if PomodoroTimer._instance.isVisible():
+                PomodoroTimer._instance.raise_()
+                PomodoroTimer._instance.activateWindow()
                 return
         
-        super().__init__(
-            parent,
-            title="🍅 Pomodoro Timer",
-            size=(500, 700),
-            style=wx.DEFAULT_FRAME_STYLE
-        )
+        super().__init__(parent)
         
         # Set this instance as the active one
         PomodoroTimer._instance = self
+        
+        self.setWindowTitle("🍅 Pomodoro Timer")
+        self.resize(500, 700)
         
         self.stats_manager = PomodoroStats()
         
         # Timer state
         self.is_running = False
         self.is_paused = False
-        self.current_phase = "work"  # "work" or "break"
+        self.current_phase = "work"
         self.work_minutes = 25
         self.break_minutes = 5
         self.time_remaining = 0
@@ -236,438 +215,401 @@ class PomodoroTimer(wx.Frame):
         self.stop_event = threading.Event()
         
         # Apply dark theme
-        from ..wx_app import DarkTheme
+        from ..qt_app import DarkTheme
         self.theme = DarkTheme
-        self.SetBackgroundColour(self.theme.MAIN_BG)
+        self.apply_dark_theme()
         
         self._create_ui()
-        self.Centre()
         
-        # Bind close event to stop timer thread and clean up
-        self.Bind(wx.EVT_CLOSE, self.on_close)
+    def apply_dark_theme(self):
+        """Apply dark theme colors"""
+        palette = QPalette()
+        palette.setColor(QPalette.ColorRole.Window, self.theme.MAIN_BG)
+        palette.setColor(QPalette.ColorRole.WindowText, self.theme.TEXT_PRIMARY)
+        palette.setColor(QPalette.ColorRole.Base, self.theme.CONSOLE_BG)
+        palette.setColor(QPalette.ColorRole.Text, self.theme.TEXT_PRIMARY)
+        palette.setColor(QPalette.ColorRole.Button, self.theme.BUTTON_BG)
+        palette.setColor(QPalette.ColorRole.ButtonText, self.theme.BUTTON_TEXT)
+        self.setPalette(palette)
     
     def _create_ui(self):
         """Create the user interface"""
-        main_sizer = wx.BoxSizer(wx.VERTICAL)
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        
+        main_layout = QVBoxLayout(central_widget)
         
         # Title section
-        title_panel = wx.Panel(self)
-        title_panel.SetBackgroundColour(self.theme.HEADER_BG)
-        title_sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        title_label = wx.StaticText(title_panel, label="🍅 POMODORO TIMER")
-        title_font = wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
-        title_label.SetFont(title_font)
-        title_label.SetForegroundColour(self.theme.TEXT_PRIMARY)
-        title_label.SetBackgroundColour(self.theme.HEADER_BG)
-        title_sizer.Add(title_label, 0, wx.ALIGN_CENTER | wx.ALL, 10)
-        
-        subtitle_label = wx.StaticText(title_panel, label="Focus • Work • Achieve")
-        subtitle_font = wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_ITALIC, wx.FONTWEIGHT_NORMAL)
-        subtitle_label.SetFont(subtitle_font)
-        subtitle_label.SetForegroundColour(self.theme.TEXT_ACCENT)
-        subtitle_label.SetBackgroundColour(self.theme.HEADER_BG)
-        title_sizer.Add(subtitle_label, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
-        
-        title_panel.SetSizer(title_sizer)
-        main_sizer.Add(title_panel, 0, wx.EXPAND)
+        title_widget = self._create_title_section()
+        main_layout.addWidget(title_widget)
         
         # Configuration section
-        config_panel = wx.Panel(self)
-        config_panel.SetBackgroundColour(self.theme.PANEL_BG)
-        config_sizer = wx.BoxSizer(wx.VERTICAL)
+        config_widget = self._create_config_section()
+        main_layout.addWidget(config_widget)
         
-        # Section title
-        config_title = wx.StaticText(config_panel, label="⚙️ Session Configuration")
-        config_title_font = wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
-        config_title.SetFont(config_title_font)
-        config_title.SetForegroundColour(self.theme.TEXT_PRIMARY)
-        config_title.SetBackgroundColour(self.theme.PANEL_BG)
-        config_sizer.Add(config_title, 0, wx.ALL, 10)
-        
-        # Work time selection
-        work_box = wx.BoxSizer(wx.HORIZONTAL)
-        work_label = wx.StaticText(config_panel, label="Work Time:")
-        work_label.SetForegroundColour(self.theme.TEXT_PRIMARY)
-        work_label.SetBackgroundColour(self.theme.PANEL_BG)
-        work_box.Add(work_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
-        
-        work_choices = ["5 min", "10 min", "15 min", "20 min", "25 min", "30 min", "35 min", "40 min", "45 min", "Custom"]
-        self.work_choice = wx.Choice(config_panel, choices=work_choices)
-        self.work_choice.SetSelection(4)  # Default 25 min
-        self.work_choice.SetBackgroundColour(self.theme.BUTTON_BG)
-        self.work_choice.SetForegroundColour(self.theme.TEXT_PRIMARY)
-        self.work_choice.Bind(wx.EVT_CHOICE, self.on_work_choice)
-        work_box.Add(self.work_choice, 1, wx.EXPAND)
-        
-        config_sizer.Add(work_box, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
-        
-        # Break time selection
-        break_box = wx.BoxSizer(wx.HORIZONTAL)
-        break_label = wx.StaticText(config_panel, label="Break Time:")
-        break_label.SetForegroundColour(self.theme.TEXT_PRIMARY)
-        break_label.SetBackgroundColour(self.theme.PANEL_BG)
-        break_box.Add(break_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
-        
-        break_choices = ["5 min", "10 min", "15 min", "20 min", "25 min", "30 min", "35 min", "40 min", "45 min", "Custom"]
-        self.break_choice = wx.Choice(config_panel, choices=break_choices)
-        self.break_choice.SetSelection(0)  # Default 5 min
-        self.break_choice.SetBackgroundColour(self.theme.BUTTON_BG)
-        self.break_choice.SetForegroundColour(self.theme.TEXT_PRIMARY)
-        self.break_choice.Bind(wx.EVT_CHOICE, self.on_break_choice)
-        break_box.Add(self.break_choice, 1, wx.EXPAND)
-        
-        config_sizer.Add(break_box, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
-        
-        config_panel.SetSizer(config_sizer)
-        main_sizer.Add(config_panel, 0, wx.EXPAND | wx.ALL, 5)
-        
-        # Timer display section
-        timer_panel = wx.Panel(self)
-        timer_panel.SetBackgroundColour(self.theme.CONSOLE_BG)
-        timer_sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        # Current phase label
-        self.phase_label = wx.StaticText(timer_panel, label="Ready to Start")
-        phase_font = wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
-        self.phase_label.SetFont(phase_font)
-        self.phase_label.SetForegroundColour(self.theme.TEXT_ACCENT)
-        self.phase_label.SetBackgroundColour(self.theme.CONSOLE_BG)
-        timer_sizer.Add(self.phase_label, 0, wx.ALIGN_CENTER | wx.TOP, 20)
-        
-        # Time display
-        self.time_label = wx.StaticText(timer_panel, label="25:00")
-        time_font = wx.Font(48, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
-        self.time_label.SetFont(time_font)
-        self.time_label.SetForegroundColour(self.theme.TEXT_PRIMARY)
-        self.time_label.SetBackgroundColour(self.theme.CONSOLE_BG)
-        timer_sizer.Add(self.time_label, 0, wx.ALIGN_CENTER | wx.TOP | wx.BOTTOM, 30)
-        
-        # Session counter
-        self.session_label = wx.StaticText(timer_panel, label="Sessions Completed: 0")
-        session_font = wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
-        self.session_label.SetFont(session_font)
-        self.session_label.SetForegroundColour(self.theme.TEXT_SECONDARY)
-        self.session_label.SetBackgroundColour(self.theme.CONSOLE_BG)
-        timer_sizer.Add(self.session_label, 0, wx.ALIGN_CENTER | wx.BOTTOM, 20)
-        
-        timer_panel.SetSizer(timer_sizer)
-        main_sizer.Add(timer_panel, 1, wx.EXPAND | wx.ALL, 5)
+        # Timer display
+        timer_widget = self._create_timer_section()
+        main_layout.addWidget(timer_widget, 1)
         
         # Control buttons
-        button_panel = wx.Panel(self)
-        button_panel.SetBackgroundColour(self.theme.PANEL_BG)
-        button_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        button_widget = self._create_button_section()
+        main_layout.addWidget(button_widget)
         
-        self.start_button = wx.Button(button_panel, label="▶ Start", size=(100, 35))
-        self._style_button(self.start_button, self.theme.ACCENT_PRIMARY)
-        self.start_button.Bind(wx.EVT_BUTTON, self.on_start)
-        button_sizer.Add(self.start_button, 0, wx.ALL, 5)
+        # Statistics
+        stats_widget = self._create_stats_section()
+        main_layout.addWidget(stats_widget)
         
-        self.pause_button = wx.Button(button_panel, label="⏸ Pause", size=(100, 35))
-        self._style_button(self.pause_button)
-        self.pause_button.Enable(False)
-        self.pause_button.Bind(wx.EVT_BUTTON, self.on_pause)
-        button_sizer.Add(self.pause_button, 0, wx.ALL, 5)
-        
-        self.stop_button = wx.Button(button_panel, label="⏹ Stop", size=(100, 35))
-        self._style_button(self.stop_button)
-        self.stop_button.Enable(False)
-        self.stop_button.Bind(wx.EVT_BUTTON, self.on_stop)
-        button_sizer.Add(self.stop_button, 0, wx.ALL, 5)
-        
-        self.reset_button = wx.Button(button_panel, label="🔄 Reset", size=(100, 35))
-        self._style_button(self.reset_button)
-        self.reset_button.Bind(wx.EVT_BUTTON, self.on_reset)
-        button_sizer.Add(self.reset_button, 0, wx.ALL, 5)
-        
-        button_panel.SetSizer(button_sizer)
-        main_sizer.Add(button_panel, 0, wx.ALIGN_CENTER | wx.ALL, 5)
-        
-        # Statistics section
-        stats_panel = wx.Panel(self)
-        stats_panel.SetBackgroundColour(self.theme.SIDEBAR_BG)
-        stats_sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        stats_title = wx.StaticText(stats_panel, label="📊 Statistics")
-        stats_title_font = wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
-        stats_title.SetFont(stats_title_font)
-        stats_title.SetForegroundColour(self.theme.TEXT_PRIMARY)
-        stats_title.SetBackgroundColour(self.theme.SIDEBAR_BG)
-        stats_sizer.Add(stats_title, 0, wx.ALL, 10)
-        
-        # Stats display
-        self.stats_text = wx.TextCtrl(
-            stats_panel,
-            style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP,
-            size=(-1, 120)
-        )
-        self.stats_text.SetBackgroundColour(self.theme.CONSOLE_BG)
-        self.stats_text.SetForegroundColour(self.theme.CONSOLE_TEXT)
-        self.stats_text.SetFont(wx.Font(9, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        stats_sizer.Add(self.stats_text, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
-        
-        # Stats buttons
-        stats_button_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        
-        view_stats_button = wx.Button(stats_panel, label="📈 View All Stats", size=(150, 30))
-        self._style_button(view_stats_button)
-        view_stats_button.Bind(wx.EVT_BUTTON, self.on_view_stats)
-        stats_button_sizer.Add(view_stats_button, 0, wx.ALL, 5)
-        
-        reset_stats_button = wx.Button(stats_panel, label="🗑️ Reset Stats", size=(150, 30))
-        self._style_button(reset_stats_button, self.theme.TEXT_ERROR)
-        reset_stats_button.Bind(wx.EVT_BUTTON, self.on_reset_stats)
-        stats_button_sizer.Add(reset_stats_button, 0, wx.ALL, 5)
-        
-        stats_sizer.Add(stats_button_sizer, 0, wx.ALIGN_CENTER)
-        
-        stats_panel.SetSizer(stats_sizer)
-        main_sizer.Add(stats_panel, 0, wx.EXPAND | wx.ALL, 5)
-        
-        # Add a button to show main window if hidden
-        show_main_panel = wx.Panel(self)
-        show_main_panel.SetBackgroundColour(self.theme.MAIN_BG)
-        show_main_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        
-        self.show_main_button = wx.Button(show_main_panel, label="🏠 Show TermTools Main Window", size=(-1, 35))
-        self._style_button(self.show_main_button, self.theme.ACCENT_SECONDARY)
-        self.show_main_button.Bind(wx.EVT_BUTTON, self.on_show_main_window)
-        show_main_sizer.Add(self.show_main_button, 1, wx.EXPAND | wx.ALL, 5)
-        
-        show_main_panel.SetSizer(show_main_sizer)
-        main_sizer.Add(show_main_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
+        # Show main window button
+        show_main_btn = QPushButton("🏠 Show TermTools Main Window")
+        show_main_btn.setMinimumHeight(35)
+        show_main_btn.clicked.connect(self.on_show_main_window)
+        self._style_button(show_main_btn, self.theme.ACCENT_SECONDARY)
+        main_layout.addWidget(show_main_btn)
         
         # Update displays
         self._update_stats_display()
         self._update_time_display()
         
-        self.SetSizer(main_sizer)
-        self.Layout()  # Force layout update
+    def _create_title_section(self):
+        """Create title section"""
+        widget = QWidget()
+        widget.setAutoFillBackground(True)
+        palette = widget.palette()
+        palette.setColor(QPalette.ColorRole.Window, self.theme.HEADER_BG)
+        widget.setPalette(palette)
+        
+        layout = QVBoxLayout(widget)
+        
+        title = QLabel("🍅 POMODORO TIMER")
+        title.setFont(QFont("", 16, QFont.Weight.Bold))
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setStyleSheet(f"color: {self.theme.TEXT_PRIMARY.name()};")
+        layout.addWidget(title)
+        
+        subtitle = QLabel("Focus • Work • Achieve")
+        subtitle.setFont(QFont("", 10))
+        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        subtitle.setStyleSheet(f"color: {self.theme.TEXT_ACCENT.name()}; font-style: italic;")
+        layout.addWidget(subtitle)
+        
+        return widget
     
-    def _style_button(self, button, color=None):
-        """Apply styling to a button"""
-        if color is None:
-            color = self.theme.BUTTON_BG
+    def _create_config_section(self):
+        """Create configuration section"""
+        widget = QWidget()
+        widget.setAutoFillBackground(True)
+        palette = widget.palette()
+        palette.setColor(QPalette.ColorRole.Window, self.theme.PANEL_BG)
+        widget.setPalette(palette)
         
-        button.SetBackgroundColour(color)
-        button.SetForegroundColour(self.theme.BUTTON_TEXT)
+        layout = QVBoxLayout(widget)
         
-        # Add hover effects
-        default_bg = color
-        hover_bg = self.theme.ACCENT_TERTIARY
-        hover_fg = self.theme.TEXT_DARK
+        title = QLabel("⚙️ Session Configuration")
+        title.setFont(QFont("", 12, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {self.theme.TEXT_PRIMARY.name()};")
+        layout.addWidget(title)
         
-        def on_enter(event):
-            button.SetBackgroundColour(hover_bg)
-            button.SetForegroundColour(hover_fg)
-            button.Refresh()
-            event.Skip()
+        # Work time selection
+        work_layout = QHBoxLayout()
+        work_label = QLabel("Work Time:")
+        work_label.setStyleSheet(f"color: {self.theme.TEXT_PRIMARY.name()};")
+        work_layout.addWidget(work_label)
         
-        def on_leave(event):
-            button.SetBackgroundColour(default_bg)
-            button.SetForegroundColour(self.theme.BUTTON_TEXT)
-            button.Refresh()
-            event.Skip()
+        self.work_choice = QComboBox()
+        work_choices = ["5 min", "10 min", "15 min", "20 min", "25 min", "30 min", "35 min", "40 min", "45 min", "Custom"]
+        self.work_choice.addItems(work_choices)
+        self.work_choice.setCurrentIndex(4)  # Default 25 min
+        self.work_choice.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {self.theme.BUTTON_BG.name()};
+                color: {self.theme.TEXT_PRIMARY.name()};
+                padding: 5px;
+                border: 1px solid {self.theme.BORDER.name()};
+            }}
+        """)
+        self.work_choice.currentTextChanged.connect(self.on_work_choice)
+        work_layout.addWidget(self.work_choice)
         
-        button.Bind(wx.EVT_ENTER_WINDOW, on_enter)
-        button.Bind(wx.EVT_LEAVE_WINDOW, on_leave)
+        layout.addLayout(work_layout)
+        
+        # Break time selection
+        break_layout = QHBoxLayout()
+        break_label = QLabel("Break Time:")
+        break_label.setStyleSheet(f"color: {self.theme.TEXT_PRIMARY.name()};")
+        break_layout.addWidget(break_label)
+        
+        self.break_choice = QComboBox()
+        break_choices = ["5 min", "10 min", "15 min", "20 min", "25 min", "30 min", "Custom"]
+        self.break_choice.addItems(break_choices)
+        self.break_choice.setCurrentIndex(0)  # Default 5 min
+        self.break_choice.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {self.theme.BUTTON_BG.name()};
+                color: {self.theme.TEXT_PRIMARY.name()};
+                padding: 5px;
+                border: 1px solid {self.theme.BORDER.name()};
+            }}
+        """)
+        self.break_choice.currentTextChanged.connect(self.on_break_choice)
+        break_layout.addWidget(self.break_choice)
+        
+        layout.addLayout(break_layout)
+        
+        return widget
     
-    def on_work_choice(self, event):
+    def _create_timer_section(self):
+        """Create timer display section"""
+        widget = QWidget()
+        widget.setAutoFillBackground(True)
+        palette = widget.palette()
+        palette.setColor(QPalette.ColorRole.Window, self.theme.CONSOLE_BG)
+        widget.setPalette(palette)
+        
+        layout = QVBoxLayout(widget)
+        
+        self.phase_label = QLabel("Ready to Start")
+        self.phase_label.setFont(QFont("", 14, QFont.Weight.Bold))
+        self.phase_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.phase_label.setStyleSheet(f"color: {self.theme.TEXT_ACCENT.name()};")
+        layout.addWidget(self.phase_label)
+        
+        self.time_label = QLabel("25:00")
+        self.time_label.setFont(QFont("Consolas", 48, QFont.Weight.Bold))
+        self.time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.time_label.setStyleSheet(f"color: {self.theme.TEXT_PRIMARY.name()};")
+        layout.addWidget(self.time_label)
+        
+        self.session_label = QLabel("Sessions Completed: 0")
+        self.session_label.setFont(QFont("", 10))
+        self.session_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.session_label.setStyleSheet(f"color: {self.theme.TEXT_SECONDARY.name()};")
+        layout.addWidget(self.session_label)
+        
+        return widget
+    
+    def _create_button_section(self):
+        """Create control buttons"""
+        widget = QWidget()
+        widget.setAutoFillBackground(True)
+        palette = widget.palette()
+        palette.setColor(QPalette.ColorRole.Window, self.theme.PANEL_BG)
+        widget.setPalette(palette)
+        
+        layout = QHBoxLayout(widget)
+        
+        self.start_button = QPushButton("▶ Start")
+        self.start_button.setMinimumHeight(35)
+        self.start_button.clicked.connect(self.on_start)
+        self._style_button(self.start_button, self.theme.ACCENT_PRIMARY)
+        layout.addWidget(self.start_button)
+        
+        self.pause_button = QPushButton("⏸ Pause")
+        self.pause_button.setMinimumHeight(35)
+        self.pause_button.setEnabled(False)
+        self.pause_button.clicked.connect(self.on_pause)
+        self._style_button(self.pause_button)
+        layout.addWidget(self.pause_button)
+        
+        self.stop_button = QPushButton("⏹ Stop")
+        self.stop_button.setMinimumHeight(35)
+        self.stop_button.setEnabled(False)
+        self.stop_button.clicked.connect(self.on_stop)
+        self._style_button(self.stop_button)
+        layout.addWidget(self.stop_button)
+        
+        self.reset_button = QPushButton("🔄 Reset")
+        self.reset_button.setMinimumHeight(35)
+        self.reset_button.clicked.connect(self.on_reset)
+        self._style_button(self.reset_button)
+        layout.addWidget(self.reset_button)
+        
+        return widget
+    
+    def _create_stats_section(self):
+        """Create statistics section"""
+        widget = QWidget()
+        widget.setAutoFillBackground(True)
+        palette = widget.palette()
+        palette.setColor(QPalette.ColorRole.Window, self.theme.SIDEBAR_BG)
+        widget.setPalette(palette)
+        
+        layout = QVBoxLayout(widget)
+        
+        title = QLabel("📊 Statistics")
+        title.setFont(QFont("", 12, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {self.theme.TEXT_PRIMARY.name()};")
+        layout.addWidget(title)
+        
+        self.stats_text = QTextEdit()
+        self.stats_text.setReadOnly(True)
+        self.stats_text.setMaximumHeight(120)
+        self.stats_text.setFont(QFont("Consolas", 9))
+        self.stats_text.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {self.theme.CONSOLE_BG.name()};
+                color: {self.theme.CONSOLE_TEXT.name()};
+                border: 1px solid {self.theme.BORDER.name()};
+            }}
+        """)
+        layout.addWidget(self.stats_text)
+        
+        # Stats buttons
+        button_layout = QHBoxLayout()
+        
+        view_stats_btn = QPushButton("📈 View All Stats")
+        view_stats_btn.setMinimumHeight(30)
+        view_stats_btn.clicked.connect(self.on_view_stats)
+        self._style_button(view_stats_btn)
+        button_layout.addWidget(view_stats_btn)
+        
+        reset_stats_btn = QPushButton("🗑️ Reset Stats")
+        reset_stats_btn.setMinimumHeight(30)
+        reset_stats_btn.clicked.connect(self.on_reset_stats)
+        self._style_button(reset_stats_btn, self.theme.TEXT_ERROR)
+        button_layout.addWidget(reset_stats_btn)
+        
+        layout.addLayout(button_layout)
+        
+        return widget
+    
+    def _style_button(self, button, bg_color=None):
+        """Apply styling to button"""
+        bg = bg_color or self.theme.BUTTON_BG
+        
+        button.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {bg.name()};
+                color: {self.theme.BUTTON_TEXT.name()};
+                border: none;
+                padding: 8px;
+            }}
+            QPushButton:hover {{
+                background-color: {self.theme.ACCENT_TERTIARY.name()};
+                color: {self.theme.TEXT_DARK.name()};
+            }}
+            QPushButton:pressed {{
+                background-color: {self.theme.BUTTON_BG_ACTIVE.name()};
+            }}
+            QPushButton:disabled {{
+                background-color: {self.theme.BUTTON_BG.name()};
+                color: {self.theme.TEXT_MUTED.name()};
+            }}
+        """)
+    
+    def on_work_choice(self, text):
         """Handle work time selection"""
-        selection = self.work_choice.GetStringSelection()
-        
-        if selection == "Custom":
-            dlg = wx.TextEntryDialog(
+        if text == "Custom":
+            minutes, ok = QInputDialog.getInt(
                 self,
-                "Enter custom work time (minutes):",
                 "Custom Work Time",
-                "25"
+                "Enter custom work time (minutes):",
+                25, 1, 180, 1
             )
             
-            if dlg.ShowModal() == wx.ID_OK:
-                try:
-                    minutes = int(dlg.GetValue())
-                    if 1 <= minutes <= 180:
-                        self.work_minutes = minutes
-                        if not self.is_running:
-                            self._update_time_display()
-                    else:
-                        wx.MessageBox(
-                            "Please enter a value between 1 and 180 minutes.",
-                            "Invalid Input",
-                            wx.OK | wx.ICON_ERROR
-                        )
-                        self.work_choice.SetSelection(4)  # Reset to 25 min
-                except ValueError:
-                    wx.MessageBox(
-                        "Please enter a valid number.",
-                        "Invalid Input",
-                        wx.OK | wx.ICON_ERROR
-                    )
-                    self.work_choice.SetSelection(4)  # Reset to 25 min
+            if ok:
+                self.work_minutes = minutes
+                if not self.is_running:
+                    self._update_time_display()
             else:
-                self.work_choice.SetSelection(4)  # Reset to 25 min
-            
-            dlg.Destroy()
+                self.work_choice.setCurrentIndex(4)  # Reset to 25 min
         else:
-            self.work_minutes = int(selection.split()[0])
+            self.work_minutes = int(text.split()[0])
             if not self.is_running:
                 self._update_time_display()
     
-    def on_break_choice(self, event):
+    def on_break_choice(self, text):
         """Handle break time selection"""
-        selection = self.break_choice.GetStringSelection()
-        
-        if selection == "Custom":
-            dlg = wx.TextEntryDialog(
+        if text == "Custom":
+            minutes, ok = QInputDialog.getInt(
                 self,
-                "Enter custom break time (minutes):",
                 "Custom Break Time",
-                "5"
+                "Enter custom break time (minutes):",
+                5, 1, 60, 1
             )
             
-            if dlg.ShowModal() == wx.ID_OK:
-                try:
-                    minutes = int(dlg.GetValue())
-                    if 1 <= minutes <= 60:
-                        self.break_minutes = minutes
-                    else:
-                        wx.MessageBox(
-                            "Please enter a value between 1 and 60 minutes.",
-                            "Invalid Input",
-                            wx.OK | wx.ICON_ERROR
-                        )
-                        self.break_choice.SetSelection(0)  # Reset to 5 min
-                except ValueError:
-                    wx.MessageBox(
-                        "Please enter a valid number.",
-                        "Invalid Input",
-                        wx.OK | wx.ICON_ERROR
-                    )
-                    self.break_choice.SetSelection(0)  # Reset to 5 min
+            if ok:
+                self.break_minutes = minutes
             else:
-                self.break_choice.SetSelection(0)  # Reset to 5 min
-            
-            dlg.Destroy()
+                self.break_choice.setCurrentIndex(0)  # Reset to 5 min
         else:
-            self.break_minutes = int(selection.split()[0])
+            self.break_minutes = int(text.split()[0])
     
-    def on_start(self, event):
-        """Start the Pomodoro timer"""
+    def on_start(self):
+        """Start the timer"""
         if not self.is_running:
             self.is_running = True
             self.is_paused = False
             
-            # Set initial time if first start
             if self.time_remaining == 0:
                 self.current_phase = "work"
                 self.time_remaining = self.work_minutes * 60
                 self._update_phase_label()
             
-            # Update button states
-            self.start_button.Enable(False)
-            self.pause_button.Enable(True)
-            self.stop_button.Enable(True)
-            self.work_choice.Enable(False)
-            self.break_choice.Enable(False)
+            self.start_button.setEnabled(False)
+            self.pause_button.setEnabled(True)
+            self.stop_button.setEnabled(True)
+            self.work_choice.setEnabled(False)
+            self.break_choice.setEnabled(False)
             
-            # Start timer thread
             self.stop_event.clear()
             self.timer_thread = threading.Thread(target=self._timer_loop, daemon=True)
             self.timer_thread.start()
     
-    def on_pause(self, event):
+    def on_pause(self):
         """Pause/resume the timer"""
         if self.is_paused:
-            # Resume
             self.is_paused = False
-            self.pause_button.SetLabel("⏸ Pause")
+            self.pause_button.setText("⏸ Pause")
         else:
-            # Pause
             self.is_paused = True
-            self.pause_button.SetLabel("▶ Resume")
+            self.pause_button.setText("▶ Resume")
     
-    def on_stop(self, event):
+    def on_stop(self):
         """Stop the timer"""
         self.stop_event.set()
         self.is_running = False
         self.is_paused = False
         self.time_remaining = 0
         
-        # Update UI
-        self.start_button.Enable(True)
-        self.pause_button.Enable(False)
-        self.stop_button.Enable(False)
-        self.work_choice.Enable(True)
-        self.break_choice.Enable(True)
-        self.pause_button.SetLabel("⏸ Pause")
+        self.start_button.setEnabled(True)
+        self.pause_button.setEnabled(False)
+        self.stop_button.setEnabled(False)
+        self.work_choice.setEnabled(True)
+        self.break_choice.setEnabled(True)
+        self.pause_button.setText("⏸ Pause")
         
-        self.phase_label.SetLabel("Ready to Start")
-        self.phase_label.SetForegroundColour(self.theme.TEXT_ACCENT)
+        self.phase_label.setText("Ready to Start")
+        self.phase_label.setStyleSheet(f"color: {self.theme.TEXT_ACCENT.name()};")
         self._update_time_display()
     
-    def on_close(self, event):
-        """Handle window close event - stop timer thread and clean up singleton"""
-        # Stop the timer thread if running
-        if self.is_running:
-            self.stop_event.set()
-            self.is_running = False
-            
-            # Wait for thread to finish (with timeout)
-            if self.timer_thread and self.timer_thread.is_alive():
-                self.timer_thread.join(timeout=1.0)
-        
-        # Clear the singleton instance
-        PomodoroTimer._instance = None
-        
-        # Check if main window is hidden - if so, exit the app
-        try:
-            wx_app = wx.GetApp()
-            if wx_app and hasattr(wx_app, 'frame'):
-                main_frame = wx_app.frame
-                if main_frame and not main_frame.IsShown():
-                    # Main window is hidden, exit the application
-                    print("✅ Pomodoro timer closed. Exiting TermTools.")
-                    wx.CallAfter(wx_app.ExitMainLoop)
-        except Exception:
-            pass  # Silently fail if there are issues checking main window
-        
-        # Destroy the window
-        self.Destroy()
-    
-    def on_reset(self, event):
+    def on_reset(self):
         """Reset the timer and session count"""
         if self.is_running:
-            dlg = wx.MessageDialog(
+            reply = QMessageBox.question(
                 self,
-                "Timer is running. Stop it first?",
                 "Timer Running",
-                wx.YES_NO | wx.ICON_QUESTION
+                "Timer is running. Stop it first?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
             )
             
-            if dlg.ShowModal() == wx.ID_YES:
-                self.on_stop(None)
+            if reply == QMessageBox.StandardButton.Yes:
+                self.on_stop()
             else:
-                dlg.Destroy()
                 return
-            
-            dlg.Destroy()
         
         self.session_count = 0
         self.current_phase = "work"
         self.time_remaining = 0
         
-        self.session_label.SetLabel("Sessions Completed: 0")
-        self.phase_label.SetLabel("Ready to Start")
-        self.phase_label.SetForegroundColour(self.theme.TEXT_ACCENT)
+        self.session_label.setText("Sessions Completed: 0")
+        self.phase_label.setText("Ready to Start")
+        self.phase_label.setStyleSheet(f"color: {self.theme.TEXT_ACCENT.name()};")
         self._update_time_display()
     
-    def on_view_stats(self, event):
+    def on_view_stats(self):
         """View all statistics"""
         stats = self.stats_manager.get_stats()
         
-        # Format stats for display
         stats_text = "="*40 + "\n"
         stats_text += "       📊 POMODORO STATISTICS\n"
         stats_text += "="*40 + "\n\n"
@@ -676,13 +618,11 @@ class PomodoroTimer(wx.Frame):
         stats_text += f"⏱️ Total Work Time: {stats.get('total_work_minutes', 0)} minutes\n"
         stats_text += f"☕ Total Break Time: {stats.get('total_break_minutes', 0)} minutes\n\n"
         
-        # Recent sessions by date
         sessions_by_date = stats.get('sessions_by_date', {})
         if sessions_by_date:
             stats_text += "📅 Recent Sessions by Date:\n"
             stats_text += "-"*40 + "\n"
             
-            # Get last 7 days
             sorted_dates = sorted(sessions_by_date.keys(), reverse=True)[:7]
             for date in sorted_dates:
                 day_stats = sessions_by_date[date]
@@ -691,54 +631,37 @@ class PomodoroTimer(wx.Frame):
                 stats_text += f"  • Work: {day_stats.get('work_minutes', 0)} min\n"
                 stats_text += f"  • Break: {day_stats.get('break_minutes', 0)} min\n"
         
-        # Show in dialog
-        dlg = wx.MessageDialog(
-            self,
-            stats_text,
-            "Pomodoro Statistics",
-            wx.OK | wx.ICON_INFORMATION
-        )
-        dlg.ShowModal()
-        dlg.Destroy()
+        QMessageBox.information(self, "Pomodoro Statistics", stats_text)
     
-    def on_show_main_window(self, event):
+    def on_show_main_window(self):
         """Show/restore the main TermTools window"""
         try:
-            wx_app = wx.GetApp()
-            if wx_app and hasattr(wx_app, 'frame'):
-                main_frame = wx_app.frame
-                if main_frame:
-                    if not main_frame.IsShown():
-                        main_frame.Show()
+            app = QApplication.instance()
+            for widget in app.topLevelWidgets():
+                if isinstance(widget, QMainWindow) and widget != self:
+                    if not widget.isVisible():
+                        widget.show()
                         print("✅ Main window restored")
-                    main_frame.Raise()
-                    main_frame.RequestUserAttention()
+                    widget.raise_()
+                    widget.activateWindow()
+                    break
         except Exception as e:
-            wx.MessageBox(
-                f"Could not show main window: {e}",
-                "Error",
-                wx.OK | wx.ICON_ERROR
-            )
+            QMessageBox.critical(self, "Error", f"Could not show main window: {e}")
     
-    def on_reset_stats(self, event):
+    def on_reset_stats(self):
         """Reset all statistics"""
-        dlg = wx.MessageDialog(
+        reply = QMessageBox.question(
             self,
-            "Are you sure you want to reset all statistics?\nThis cannot be undone.",
             "Confirm Reset Statistics",
-            wx.YES_NO | wx.ICON_WARNING | wx.NO_DEFAULT
+            "Are you sure you want to reset all statistics?\nThis cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
         )
         
-        if dlg.ShowModal() == wx.ID_YES:
+        if reply == QMessageBox.StandardButton.Yes:
             self.stats_manager.reset_stats()
             self._update_stats_display()
-            wx.MessageBox(
-                "Statistics have been reset successfully.",
-                "Statistics Reset",
-                wx.OK | wx.ICON_INFORMATION
-            )
-        
-        dlg.Destroy()
+            QMessageBox.information(self, "Statistics Reset", "Statistics have been reset successfully.")
     
     def _timer_loop(self):
         """Main timer loop running in separate thread"""
@@ -746,13 +669,11 @@ class PomodoroTimer(wx.Frame):
             if not self.is_paused:
                 if self.time_remaining > 0:
                     self.time_remaining -= 1
-                    wx.CallAfter(self._update_time_display)
+                    QApplication.instance().postEvent(self, UpdateTimeEvent())
                     time.sleep(1)
                 else:
-                    # Session complete
-                    wx.CallAfter(self._on_session_complete)
+                    QApplication.instance().postEvent(self, SessionCompleteEvent())
                     
-                    # Auto-switch to next phase
                     if self.current_phase == "work":
                         self.current_phase = "break"
                         self.time_remaining = self.break_minutes * 60
@@ -760,99 +681,77 @@ class PomodoroTimer(wx.Frame):
                         self.current_phase = "work"
                         self.time_remaining = self.work_minutes * 60
                     
-                    wx.CallAfter(self._update_phase_label)
-                    wx.CallAfter(self._update_time_display)
+                    QApplication.instance().postEvent(self, UpdatePhaseEvent())
+                    QApplication.instance().postEvent(self, UpdateTimeEvent())
             else:
-                time.sleep(0.1)  # Short sleep when paused
+                time.sleep(0.1)
     
     def _on_session_complete(self):
         """Handle session completion"""
         if self.current_phase == "work":
             self.session_count += 1
-            self.session_label.SetLabel(f"Sessions Completed: {self.session_count}")
+            self.session_label.setText(f"Sessions Completed: {self.session_count}")
             
-            # Record work session in stats
             self.stats_manager.record_work_session(self.work_minutes)
             
-            # Play completion sound for work session (in separate thread to not block UI)
             threading.Thread(
                 target=SoundNotifier.play_completion_sound,
                 args=("work",),
                 daemon=True
             ).start()
             
-            # Show notification
-            wx.MessageBox(
-                f"✅ Work session complete!\n\nTime for a {self.break_minutes} minute break.",
+            QMessageBox.information(
+                self,
                 "Pomodoro Complete",
-                wx.OK | wx.ICON_INFORMATION
+                f"✅ Work session complete!\n\nTime for a {self.break_minutes} minute break."
             )
         else:
-            # Record break session in stats
             self.stats_manager.record_break_session(self.break_minutes)
             
-            # Play completion sound for break session (in separate thread to not block UI)
             threading.Thread(
                 target=SoundNotifier.play_completion_sound,
                 args=("break",),
                 daemon=True
             ).start()
             
-            # Show notification
-            wx.MessageBox(
-                f"☕ Break complete!\n\nReady for the next {self.work_minutes} minute work session?",
+            QMessageBox.information(
+                self,
                 "Break Complete",
-                wx.OK | wx.ICON_INFORMATION
+                f"☕ Break complete!\n\nReady for the next {self.work_minutes} minute work session?"
             )
         
-        # Update stats display
         self._update_stats_display()
     
     def _update_time_display(self):
         """Update the time display label"""
-        # Check if widget still exists
-        if not self.time_label or not self.time_label.IsShown():
-            return
-        
         try:
             if self.time_remaining == 0:
-                # Show default time based on current phase
                 if self.current_phase == "work":
                     minutes = self.work_minutes
                 else:
                     minutes = self.break_minutes
-                self.time_label.SetLabel(f"{minutes:02d}:00")
+                self.time_label.setText(f"{minutes:02d}:00")
             else:
                 minutes = self.time_remaining // 60
                 seconds = self.time_remaining % 60
-                self.time_label.SetLabel(f"{minutes:02d}:{seconds:02d}")
+                self.time_label.setText(f"{minutes:02d}:{seconds:02d}")
         except RuntimeError:
-            # Widget has been deleted, stop trying to update
             pass
     
     def _update_phase_label(self):
         """Update the phase label"""
-        # Check if widget still exists
-        if not self.phase_label or not self.phase_label.IsShown():
-            return
-        
         try:
             if self.current_phase == "work":
-                self.phase_label.SetLabel("🎯 WORK SESSION")
-                self.phase_label.SetForegroundColour(self.theme.TEXT_SUCCESS)
+                self.phase_label.setText("🎯 WORK SESSION")
+                self.phase_label.setStyleSheet(f"color: {self.theme.TEXT_SUCCESS.name()};")
             else:
-                self.phase_label.SetLabel("☕ BREAK TIME")
-                self.phase_label.SetForegroundColour(self.theme.ACCENT_PRIMARY)
+                self.phase_label.setText("☕ BREAK TIME")
+                self.phase_label.setStyleSheet(f"color: {self.theme.ACCENT_PRIMARY.name()};")
         except RuntimeError:
-            # Widget has been deleted, stop trying to update
             pass
     
     def _update_stats_display(self):
         """Update the stats text display"""
-        # Check if widget still exists
-        if not self.stats_text or not self.stats_text.IsShown():
-            return
-        
         try:
             today_stats = self.stats_manager.get_today_stats()
             all_stats = self.stats_manager.get_stats()
@@ -865,36 +764,82 @@ class PomodoroTimer(wx.Frame):
             stats_text += f"  🎯 Total Sessions: {all_stats.get('total_work_sessions', 0)}\n"
             stats_text += f"  ⏱️  Total Work: {all_stats.get('total_work_minutes', 0)} min\n"
             
-            self.stats_text.SetValue(stats_text)
+            self.stats_text.setPlainText(stats_text)
         except RuntimeError:
-            # Widget has been deleted, stop trying to update
             pass
+    
+    def closeEvent(self, event):
+        """Handle window close event"""
+        if self.is_running:
+            self.stop_event.set()
+            self.is_running = False
+            
+            if self.timer_thread and self.timer_thread.is_alive():
+                self.timer_thread.join(timeout=1.0)
+        
+        PomodoroTimer._instance = None
+        
+        try:
+            app = QApplication.instance()
+            for widget in app.topLevelWidgets():
+                if isinstance(widget, QMainWindow) and widget != self and not widget.isVisible():
+                    print("✅ Pomodoro timer closed. Exiting TermTools.")
+                    QApplication.quit()
+                    break
+        except Exception:
+            pass
+        
+        event.accept()
+    
+    def event(self, event):
+        """Handle custom events"""
+        if isinstance(event, UpdateTimeEvent):
+            self._update_time_display()
+            return True
+        elif isinstance(event, UpdatePhaseEvent):
+            self._update_phase_label()
+            return True
+        elif isinstance(event, SessionCompleteEvent):
+            self._on_session_complete()
+            return True
+        return super().event(event)
+
+
+# Custom event classes
+from PyQt6.QtCore import QEvent
+
+class UpdateTimeEvent(QEvent):
+    EVENT_TYPE = QEvent.Type(QEvent.registerEventType())
+    def __init__(self):
+        super().__init__(self.EVENT_TYPE)
+
+class UpdatePhaseEvent(QEvent):
+    EVENT_TYPE = QEvent.Type(QEvent.registerEventType())
+    def __init__(self):
+        super().__init__(self.EVENT_TYPE)
+
+class SessionCompleteEvent(QEvent):
+    EVENT_TYPE = QEvent.Type(QEvent.registerEventType())
+    def __init__(self):
+        super().__init__(self.EVENT_TYPE)
 
 
 @pomodoro_bp.route("13", "🍅 Pomodoro Timer", "Focus timer with work/break sessions", "🎯 PRODUCTIVITY", order=1)
 def show_pomodoro_timer(app=None):
     """Show the Pomodoro timer window"""
-    def show_frame():
-        """Function to run on main thread"""
-        try:
-            # Check if an instance already exists
-            if PomodoroTimer._instance is not None and PomodoroTimer._instance.IsShown():
-                # Bring existing window to front
-                PomodoroTimer._instance.Raise()
-                PomodoroTimer._instance.RequestUserAttention()
-                print("💡 Pomodoro timer is already open - bringing window to front")
-                return
-            
-            # Create and show the Pomodoro timer as an independent window
-            timer_frame = PomodoroTimer()
-            timer_frame.Show()
-            
-            print("✅ Pomodoro timer window opened")
-            
-        except Exception as e:
-            print(f"❌ Error showing Pomodoro timer: {e}")
-            import traceback
-            traceback.print_exc()
-    
-    # Use wx.CallAfter to ensure GUI operations happen on main thread
-    wx.CallAfter(show_frame)
+    try:
+        if PomodoroTimer._instance is not None and PomodoroTimer._instance.isVisible():
+            PomodoroTimer._instance.raise_()
+            PomodoroTimer._instance.activateWindow()
+            print("💡 Pomodoro timer is already open - bringing window to front")
+            return
+        
+        timer_frame = PomodoroTimer()
+        timer_frame.show()
+        
+        print("✅ Pomodoro timer window opened")
+        
+    except Exception as e:
+        print(f"❌ Error showing Pomodoro timer: {e}")
+        import traceback
+        traceback.print_exc()

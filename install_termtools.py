@@ -68,6 +68,7 @@ import ctypes, sys
 import winreg
 import json
 from datetime import datetime
+import platform
 
 # ==========================================
 # CONFIGURATION VARIABLES - MODIFY AS NEEDED
@@ -98,6 +99,12 @@ AUTO_UPGRADE_PIP = True                     # Upgrade pip in virtual environment
 INSTALL_REQUIREMENTS = True                 # Install from requirements.txt if present
 CLEANUP_ON_ERROR = True                     # Clean up temp files on error
 REQUIRE_VENV = True                         # MANDATORY: TermTools requires virtual environment
+INSTALL_GIT = True                          # Install Git for Windows if not present
+
+# Git Configuration
+GIT_VERSION = "2.47.0"                      # Git for Windows version to install
+GIT_DOWNLOAD_URL = f"https://github.com/git-for-windows/git/releases/download/v{GIT_VERSION}.windows.1/Git-{GIT_VERSION}-64-bit.exe"
+GIT_INSTALL_SILENT = True                   # Silent installation without GUI prompts
 
 # CRITICAL: TermTools ONLY runs with virtual environment. 
 # No system Python fallback is allowed.
@@ -147,6 +154,119 @@ def save_installation_metadata(target_app, repo_owner, repo_name, commit_hash):
         
     except Exception as e:
         print(f"Warning: Could not save installation metadata: {e}")
+
+def check_git_installed():
+    """Check if Git is already installed and accessible"""
+    try:
+        result = subprocess.run(
+            ['git', '--version'],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True
+        )
+        version_output = result.stdout.strip()
+        print(f"✅ Git already installed: {version_output}")
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+def install_git_for_windows():
+    """Download and install Git for Windows silently"""
+    if not INSTALL_GIT:
+        print("ℹ️  Git installation disabled in configuration")
+        return False
+    
+    print("\n🔧 Checking Git installation...")
+    
+    if check_git_installed():
+        return True
+    
+    print("📥 Git not found. Installing Git for Windows...")
+    print(f"   Version: {GIT_VERSION}")
+    
+    temp_dir = tempfile.gettempdir()
+    installer_path = os.path.join(temp_dir, f"Git-{GIT_VERSION}-installer.exe")
+    
+    try:
+        # Download Git installer
+        print(f"   Downloading from: {GIT_DOWNLOAD_URL}")
+        print("   This may take a few minutes depending on your connection...")
+        urllib.request.urlretrieve(GIT_DOWNLOAD_URL, installer_path)
+        print("✅ Git installer downloaded successfully")
+        
+        # Install Git silently
+        print("🔧 Installing Git for Windows...")
+        print("   This will install Git with default settings...")
+        
+        if GIT_INSTALL_SILENT:
+            # Silent installation with sensible defaults
+            # /VERYSILENT = no GUI, /NORESTART = don't restart, /NOCANCEL = can't cancel
+            # /DIR specifies installation directory
+            # /COMPONENTS includes core Git + Windows Explorer integration
+            install_args = [
+                installer_path,
+                '/VERYSILENT',
+                '/NORESTART',
+                '/NOCANCEL',
+                '/SP-',
+                '/CLOSEAPPLICATIONS',
+                '/RESTARTAPPLICATIONS',
+                '/COMPONENTS="icons,ext\\reg\\shellhere,assoc,assoc_sh"',
+            ]
+        else:
+            # Interactive installation (user sees the wizard)
+            install_args = [installer_path]
+        
+        result = subprocess.run(
+            install_args,
+            capture_output=True,
+            text=True,
+            timeout=300  # 5 minutes timeout for installation
+        )
+        
+        # Clean up installer
+        try:
+            os.remove(installer_path)
+            print("🧹 Installer cleaned up")
+        except Exception as e:
+            print(f"⚠️  Could not remove installer: {e}")
+        
+        # Verify installation
+        print("🔍 Verifying Git installation...")
+        
+        # Add common Git paths to system PATH for this session
+        git_paths = [
+            r"C:\Program Files\Git\cmd",
+            r"C:\Program Files\Git\bin",
+        ]
+        
+        for git_path in git_paths:
+            if os.path.exists(git_path) and git_path not in os.environ['PATH']:
+                os.environ['PATH'] = git_path + os.pathsep + os.environ['PATH']
+        
+        # Wait a moment for installation to complete
+        import time
+        time.sleep(2)
+        
+        if check_git_installed():
+            print("✅ Git for Windows installed successfully!")
+            print("💡 Git is now available for TermTools operations")
+            return True
+        else:
+            print("⚠️  Git installation completed but 'git' command not found in PATH")
+            print("   You may need to restart your terminal or computer for PATH changes to take effect")
+            print("   TermTools will still work, but Git operations require Git to be in PATH")
+            return False
+        
+    except subprocess.TimeoutExpired:
+        print("❌ Git installation timed out after 5 minutes")
+        return False
+    except Exception as e:
+        print(f"❌ Error installing Git: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 
 
@@ -202,6 +322,13 @@ if ctypes.windll.shell32.IsUserAnAdmin() == 0:
 # Use the current Python executable (script is already running, so Python exists)
 python_executable = sys.executable
 print(f"🐍 Using Python: {python_executable}")
+
+# Install Git for Windows if not present (required for Git operations in TermTools)
+git_installed = install_git_for_windows()
+if not git_installed and INSTALL_GIT:
+    print("\n⚠️  WARNING: Git installation was not successful")
+    print("   TermTools will install, but Git operations will not work until Git is installed")
+    print("   You can manually install Git from: https://git-scm.com/download/win")
 
 # Build repository URL from configuration
 REPO_FULL_NAME = f"{REPO_OWNER}/{REPO_NAME}"
@@ -456,7 +583,15 @@ try:
     print(f"\n🎉 {TARGET_APP_FOLDER} installation completed successfully!")
     print(f"📍 Installation location: {target_app}")
     print(f"🐍 Virtual environment: {venv_path}")
-    print(f" Right-click context menu added - you can now run {TARGET_APP_FOLDER} from any folder")
+    print(f"📝 Right-click context menu added - you can now run {TARGET_APP_FOLDER} from any folder")
+    
+    # Check and report Git status
+    if check_git_installed():
+        print(f"✅ Git is installed and ready for Git operations")
+    else:
+        print(f"⚠️  Git is not available - Git operations will not work")
+        print(f"   Install Git from: https://git-scm.com/download/win")
+    
     print(f"\n⚠️  IMPORTANT: TermTools runs ONLY from its virtual environment")
     print(f"   Do not delete the virtual environment at: {venv_path}")
 

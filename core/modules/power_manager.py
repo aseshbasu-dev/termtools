@@ -9,11 +9,15 @@ State is persisted in JSON format in core/data/shutdown_state.json.
 
 import os
 import subprocess
-import wx
+import logging
+from PyQt6.QtWidgets import QApplication, QMessageBox, QInputDialog
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
 from ..blueprint import Blueprint
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 def _get_subprocess_flags():
     """Get subprocess creation flags to prevent console window flashing on Windows"""
@@ -37,54 +41,62 @@ class SystemPowerManager:
     
     def _show_gui_confirmation(self, message, title="Confirm Action"):
         """Show GUI confirmation dialog"""
+        logger.debug(f"Showing GUI confirmation dialog: title='{title}', message='{message}'")
         try:
-            # Check if we're in a GUI environment by trying to create a dialog
-            if wx.GetApp():
-                dlg = wx.MessageDialog(
-                    None,  # Use None as parent, wx will find appropriate parent
-                    message,
+            # Check if we're in a GUI environment
+            if QApplication.instance():
+                reply = QMessageBox.question(
+                    None,  # Use None as parent
                     title,
-                    wx.YES_NO | wx.ICON_QUESTION | wx.NO_DEFAULT
+                    message,
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No
                 )
-                result = dlg.ShowModal()
-                dlg.Destroy()
-                return result == wx.ID_YES
+                result = reply == QMessageBox.StandardButton.Yes
+                logger.debug(f"User response: {'Yes' if result else 'No'}")
+                return result
             else:
+                logger.warning("GUI unavailable - TermTools requires GUI mode")
                 print(f"❌ GUI unavailable - TermTools requires GUI mode")
                 print(f"   Message: {message}")
                 return False
         except Exception as e:
+            logger.error(f"Error showing GUI confirmation: {e}", exc_info=True)
             print(f"❌ Error showing GUI confirmation: {e}")
             return False
     
     def _show_gui_error(self, message, title="Error"):
         """Show GUI error dialog if available, fallback to terminal"""
+        logger.error(f"GUI Error: {title} - {message}")
         try:
             # Check if we're in a GUI environment
-            if wx.GetApp():
-                wx.MessageBox(
-                    message,
+            if QApplication.instance():
+                QMessageBox.critical(
+                    None,
                     title,
-                    wx.OK | wx.ICON_ERROR
+                    message
                 )
                 return
             print(f"❌ {message}")
-        except:
+        except Exception as e:
+            logger.error(f"Failed to show GUI error: {e}", exc_info=True)
             print(f"❌ {message}")
     
     def _show_gui_info(self, message, title="Information"):
         """Show GUI info dialog if available, fallback to terminal"""
+        logger.info(f"GUI Info: {title} - {message}")
         try:
             # Check if we're in a GUI environment
-            if wx.GetApp():
-                wx.MessageBox(
-                    message,
+            if QApplication.instance():
+                QMessageBox.information(
+                    None,
                     title,
-                    wx.OK | wx.ICON_INFORMATION
+                    message
                 )
                 return
             print(f"ℹ️  {message}")
-        except:
+        except Exception as e:
+            logger.error(f"Failed to show GUI info: {e}", exc_info=True)
             print(f"ℹ️  {message}")
         
     def _save_shutdown_state(self, scheduled=False, scheduled_time=None, description=""):
@@ -169,17 +181,19 @@ class SystemPowerManager:
         
         try:
             # Check if we're in a GUI environment
-            if wx.GetApp():
-                dlg = wx.SingleChoiceDialog(
+            if QApplication.instance():
+                item, ok = QInputDialog.getItem(
                     None,
-                    "Select shutdown option:",
                     "Power Manager - Shutdown Options",
-                    choices
+                    "Select shutdown option:",
+                    choices,
+                    0,
+                    False
                 )
                 
-                if dlg.ShowModal() == wx.ID_OK:
-                    choice_index = dlg.GetSelection()
-                    dlg.Destroy()
+                if ok and item:
+                    choice_index = choices.index(item)
+                    logger.debug(f"User selected shutdown option: {choice_index} - {item}")
                     
                     if choice_index == 0:
                         self._schedule_shutdown_minutes(60, "1 hour")
@@ -194,37 +208,46 @@ class SystemPowerManager:
                     elif choice_index == 5:
                         self._check_shutdown_status()
                 else:
-                    dlg.Destroy()
+                    logger.debug("User cancelled shutdown options dialog")
                     print("⚠️  Operation cancelled.")
             else:
+                logger.warning("GUI unavailable for shutdown options")
                 print("❌ GUI unavailable - TermTools requires GUI mode")
                 
         except Exception as e:
+            logger.error(f"Error showing shutdown options: {e}", exc_info=True)
             print(f"❌ Error showing shutdown options: {e}")
     
     def _schedule_shutdown_minutes(self, minutes, description):
         """Schedule shutdown for specified minutes"""
+        logger.info(f"Attempting to schedule shutdown: {minutes} minutes ({description})")
+        
         # Confirm the action using GUI or terminal
         confirmation_message = f"You are about to schedule a shutdown in {description}.\n\nThe system will shut down in {minutes} minutes."
         
         if not self._show_gui_confirmation(confirmation_message, "Confirm Shutdown"):
+            logger.info("User cancelled shutdown scheduling")
             self._show_gui_info("Shutdown cancelled.", "Cancelled")
             return
             
         try:
             scheduled_time = datetime.now() + timedelta(minutes=minutes)
+            logger.debug(f"Scheduled shutdown time: {scheduled_time}")
             
             if os.name == 'nt':  # Windows
                 # Use Windows shutdown command
+                logger.debug(f"Executing Windows shutdown command: shutdown /s /t {minutes * 60}")
                 subprocess.run(['shutdown', '/s', '/t', str(minutes * 60)], check=True, **_get_subprocess_flags())
                 success_message = f"✅ Shutdown scheduled successfully!\n🕒 System will shutdown in {description}\n💡 Use 'shutdown /a' in command prompt to cancel"
                 self._show_gui_info(success_message, "Shutdown Scheduled")
             else:  # Unix-like systems
+                logger.debug(f"Executing Unix shutdown command: shutdown -h +{minutes}")
                 subprocess.run(['sudo', 'shutdown', '-h', f"+{minutes}"], check=True, **_get_subprocess_flags())
                 success_message = f"✅ Shutdown scheduled successfully!\n🕒 System will shutdown in {description}\n💡 Use 'sudo shutdown -c' to cancel"
                 self._show_gui_info(success_message, "Shutdown Scheduled")
                 
             self.shutdown_active = True
+            logger.info(f"Shutdown successfully scheduled for {scheduled_time}")
             
             # Save the shutdown state
             self._save_shutdown_state(
@@ -242,48 +265,43 @@ class SystemPowerManager:
     
     def _custom_shutdown_time(self):
         """Schedule shutdown for custom time in minutes via GUI"""
+        logger.debug("Opening custom shutdown time dialog")
         try:
             # Check if we're in a GUI environment
-            if wx.GetApp():
-                dlg = wx.TextEntryDialog(
+            if QApplication.instance():
+                minutes, ok = QInputDialog.getInt(
                     None,
-                    "Enter minutes until shutdown (1-1440):",
                     "Custom Shutdown Time",
-                    "60"  # Default to 1 hour
+                    "Enter minutes until shutdown (1-1440):",
+                    60,  # Default value
+                    1,   # Minimum
+                    1440,  # Maximum (24 hours)
+                    1    # Step
                 )
                 
-                if dlg.ShowModal() == wx.ID_OK:
-                    minutes_str = dlg.GetValue().strip()
-                    dlg.Destroy()
+                if ok:
+                    logger.info(f"User entered custom shutdown time: {minutes} minutes")
+                    hours = minutes // 60
+                    remaining_minutes = minutes % 60
                     
-                    try:
-                        minutes = int(minutes_str)
-                        
-                        if minutes < 1 or minutes > 1440:  # Max 24 hours
-                            self._show_gui_error("Invalid time. Please enter 1-1440 minutes.", "Invalid Input")
-                            return
-                            
-                        hours = minutes // 60
-                        remaining_minutes = minutes % 60
-                        
-                        if hours > 0:
-                            description = f"{hours} hour{'s' if hours > 1 else ''}"
-                            if remaining_minutes > 0:
-                                description += f" and {remaining_minutes} minute{'s' if remaining_minutes > 1 else ''}"
-                        else:
-                            description = f"{minutes} minute{'s' if minutes > 1 else ''}"
-                            
-                        self._schedule_shutdown_minutes(minutes, description)
-                        
-                    except ValueError:
-                        self._show_gui_error("Invalid input. Please enter a valid number.", "Invalid Input")
+                    if hours > 0:
+                        description = f"{hours} hour{'s' if hours > 1 else ''}"
+                        if remaining_minutes > 0:
+                            description += f" and {remaining_minutes} minute{'s' if remaining_minutes > 1 else ''}"
+                    else:
+                        description = f"{minutes} minute{'s' if minutes > 1 else ''}"
+                    
+                    logger.debug(f"Scheduling shutdown with description: {description}")
+                    self._schedule_shutdown_minutes(minutes, description)
                 else:
-                    dlg.Destroy()
+                    logger.debug("User cancelled custom shutdown time dialog")
                     print("⚠️  Operation cancelled.")
             else:
+                logger.warning("GUI unavailable for custom shutdown time")
                 print("❌ GUI unavailable - TermTools requires GUI mode")
                 
         except Exception as e:
+            logger.error(f"Error getting custom shutdown time: {e}", exc_info=True)
             print(f"❌ Error getting custom shutdown time: {e}")
     
     def _cancel_shutdown(self):
