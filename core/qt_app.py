@@ -804,6 +804,34 @@ class TermToolsMainWindow(QMainWindow):
             self.execute_folder_copy_handler(handler)
             return
         
+        # Special handling for start_project - get user input BEFORE starting thread
+        if hasattr(handler, '__name__') and 'start_project' in handler.__name__:
+            logger.debug("Detected start_project handler - getting user input in main thread")
+            self.execute_start_project_handler(handler)
+            return
+        
+        # Special handling for handlers that need user input in main thread
+        if hasattr(handler, '__name__'):
+            handler_name = handler.__name__
+            
+            # Git operations that need input
+            if handler_name in ['git_initialize_repo', 'git_quick_commit_push', 'git_switch_repo', 'git_untrack_commit_push']:
+                logger.debug(f"Detected {handler_name} - getting user input in main thread")
+                self.execute_git_handler_with_input(handler)
+                return
+            
+            # Python environment operations that need input
+            if handler_name in ['create_new_venv', 'create_requirements_file', 'delete_all_venvs']:
+                logger.debug(f"Detected {handler_name} - getting user input in main thread")
+                self.execute_python_env_handler_with_input(handler)
+                return
+            
+            # Project templates that need input
+            if handler_name == 'create_flask_project_scaffold':
+                logger.debug("Detected Flask scaffold - getting user input in main thread")
+                self.execute_flask_scaffold_handler(handler)
+                return
+        
         def run():
             with redirect_stdout(self.stdout_redirector), redirect_stderr(self.stderr_redirector):
                 try:
@@ -904,6 +932,368 @@ class TermToolsMainWindow(QMainWindow):
         except Exception as e:
             logger.error(f"Error in execute_folder_copy_handler: {e}", exc_info=True)
             print(f"❌ Error setting up folder copy: {e}")
+    
+    def execute_git_handler_with_input(self, handler):
+        """Execute git handler with user input from main thread"""
+        logger = logging.getLogger(__name__)
+        logger.info(f"Executing git handler with main-thread input: {handler.__name__}")
+        
+        from PyQt6.QtWidgets import QMessageBox, QInputDialog
+        
+        try:
+            handler_name = handler.__name__
+            user_input = {}
+            
+            # Get specific input based on handler
+            if handler_name == 'git_initialize_repo':
+                # Get remote URL
+                text, ok = QInputDialog.getText(
+                    self,
+                    "Initialize Git Repository",
+                    "Enter the remote repository URL:\n(e.g., https://github.com/username/repo.git)",
+                    text=""
+                )
+                if not ok:
+                    print("❌ Operation cancelled by user")
+                    return
+                user_input['remote_url'] = text.strip() if text.strip() else None
+                
+            elif handler_name == 'git_quick_commit_push':
+                # Get commit message
+                text, ok = QInputDialog.getText(
+                    self,
+                    "Git Commit Message",
+                    "Enter commit message:",
+                    text="bug fixes"
+                )
+                if not ok:
+                    print("❌ Operation cancelled by user")
+                    return
+                user_input['commit_message'] = text.strip() if text.strip() else "bug fixes"
+                
+            elif handler_name == 'git_switch_repo':
+                # Get new remote URL
+                text, ok = QInputDialog.getText(
+                    self,
+                    "Switch Git Repository",
+                    "Enter new remote repository URL:",
+                    text=""
+                )
+                if not ok:
+                    print("❌ Operation cancelled by user")
+                    return
+                user_input['new_remote_url'] = text.strip()
+                
+            elif handler_name == 'git_untrack_commit_push':
+                # Get path to untrack
+                text, ok = QInputDialog.getText(
+                    self,
+                    "Untrack Files/Folders",
+                    "Enter path to untrack (file or folder):",
+                    text=""
+                )
+                if not ok:
+                    print("❌ Operation cancelled by user")
+                    return
+                user_input['untrack_path'] = text.strip()
+                
+                # Get commit message
+                text, ok = QInputDialog.getText(
+                    self,
+                    "Git Commit Message",
+                    "Enter commit message:",
+                    text="Removed tracked files"
+                )
+                if not ok:
+                    print("❌ Operation cancelled by user")
+                    return
+                user_input['commit_message'] = text.strip() if text.strip() else "Removed tracked files"
+            
+            # Store input in app config for worker thread to access
+            self.app.set_config('_git_user_input', user_input)
+            
+            # Run handler in worker thread
+            def run():
+                with redirect_stdout(self.stdout_redirector), redirect_stderr(self.stderr_redirector):
+                    try:
+                        import inspect
+                        sig = inspect.signature(handler)
+                        if len(sig.parameters) > 0:
+                            handler(self.app)
+                        else:
+                            handler()
+                        logger.info("Git handler completed successfully")
+                        print("\n✅ Operation completed.\n")
+                    except Exception as e:
+                        logger.error(f"Error in git handler: {e}", exc_info=True)
+                        print(f"\n❌ Error: {e}\n")
+                        import traceback
+                        traceback.print_exc()
+                    finally:
+                        self.app.set_config('_git_user_input', None)
+            
+            thread = threading.Thread(target=run, daemon=True, name=f"Git-{handler_name}")
+            thread.start()
+            
+        except Exception as e:
+            logger.error(f"Error in execute_git_handler_with_input: {e}", exc_info=True)
+            print(f"❌ Error setting up git operation: {e}")
+    
+    def execute_python_env_handler_with_input(self, handler):
+        """Execute python environment handler with user input from main thread"""
+        logger = logging.getLogger(__name__)
+        logger.info(f"Executing python env handler with main-thread input: {handler.__name__}")
+        
+        from PyQt6.QtWidgets import QMessageBox, QInputDialog
+        from pathlib import Path
+        
+        try:
+            handler_name = handler.__name__
+            user_input = {}
+            
+            if handler_name == 'create_new_venv':
+                venv_path = Path(".venv")
+                if venv_path.exists():
+                    reply = QMessageBox.question(
+                        self,
+                        "Virtual Environment Exists",
+                        f"A virtual environment already exists at:\n{venv_path.absolute()}\n\n"
+                        f"Do you want to delete it and create a new one?",
+                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                        QMessageBox.StandardButton.No
+                    )
+                    user_input['overwrite'] = (reply == QMessageBox.StandardButton.Yes)
+                    
+                    if not user_input['overwrite']:
+                        print("❌ Operation cancelled by user")
+                        return
+                
+                # Ask about .gitignore
+                reply = QMessageBox.question(
+                    self,
+                    "Create .gitignore",
+                    "Do you want to create a .gitignore file?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes
+                )
+                user_input['create_gitignore'] = (reply == QMessageBox.StandardButton.Yes)
+                
+                # Ask about requirements.txt
+                reply = QMessageBox.question(
+                    self,
+                    "Create requirements.txt",
+                    "Do you want to create a requirements.txt file?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes
+                )
+                user_input['create_requirements'] = (reply == QMessageBox.StandardButton.Yes)
+                
+            elif handler_name == 'create_requirements_file':
+                items = ["Empty", "Flask", "Django", "FastAPI", "Data Science", "Web Scraping"]
+                item, ok = QInputDialog.getItem(
+                    self,
+                    "Create requirements.txt",
+                    "Choose a template:",
+                    items,
+                    0,
+                    False
+                )
+                if not ok:
+                    print("❌ Operation cancelled by user")
+                    return
+                user_input['template'] = item
+                
+                # Check if file exists
+                if Path("requirements.txt").exists():
+                    reply = QMessageBox.question(
+                        self,
+                        "File Exists",
+                        "requirements.txt already exists. Overwrite?",
+                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                        QMessageBox.StandardButton.No
+                    )
+                    if reply != QMessageBox.StandardButton.Yes:
+                        print("❌ Operation cancelled by user")
+                        return
+                    user_input['overwrite'] = True
+                
+            elif handler_name == 'delete_all_venvs':
+                reply = QMessageBox.question(
+                    self,
+                    "Delete All Virtual Environments",
+                    "⚠️  This will recursively search and delete all .venv folders!\n\n"
+                    "Are you sure you want to continue?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No
+                )
+                if reply != QMessageBox.StandardButton.Yes:
+                    print("❌ Operation cancelled by user")
+                    return
+                user_input['confirmed'] = True
+            
+            # Store input in app config
+            self.app.set_config('_python_env_user_input', user_input)
+            
+            # Run handler in worker thread
+            def run():
+                with redirect_stdout(self.stdout_redirector), redirect_stderr(self.stderr_redirector):
+                    try:
+                        import inspect
+                        sig = inspect.signature(handler)
+                        if len(sig.parameters) > 0:
+                            handler(self.app)
+                        else:
+                            handler()
+                        logger.info("Python env handler completed successfully")
+                        print("\n✅ Operation completed.\n")
+                    except Exception as e:
+                        logger.error(f"Error in python env handler: {e}", exc_info=True)
+                        print(f"\n❌ Error: {e}\n")
+                        import traceback
+                        traceback.print_exc()
+                    finally:
+                        self.app.set_config('_python_env_user_input', None)
+            
+            thread = threading.Thread(target=run, daemon=True, name=f"PythonEnv-{handler_name}")
+            thread.start()
+            
+        except Exception as e:
+            logger.error(f"Error in execute_python_env_handler_with_input: {e}", exc_info=True)
+            print(f"❌ Error setting up python environment operation: {e}")
+    
+    def execute_flask_scaffold_handler(self, handler):
+        """Execute Flask scaffold with user input from main thread"""
+        logger = logging.getLogger(__name__)
+        logger.info("Executing Flask scaffold handler with main-thread input")
+        
+        from PyQt6.QtWidgets import QMessageBox, QInputDialog
+        
+        try:
+            # Get project name
+            text, ok = QInputDialog.getText(
+                self,
+                "Flask Project Scaffold",
+                "Enter project name:",
+                text="flask_project"
+            )
+            
+            if not ok:
+                print("❌ Operation cancelled by user")
+                return
+            
+            project_name = text.strip() if text.strip() else "flask_project"
+            
+            # Validate project name
+            if not project_name.replace('_', '').replace('-', '').isalnum():
+                QMessageBox.critical(
+                    self,
+                    "Invalid Project Name",
+                    "Project name should contain only letters, numbers, underscores, and hyphens."
+                )
+                return
+            
+            # Store input
+            self.app.set_config('_flask_scaffold_project_name', project_name)
+            
+            # Run handler in worker thread
+            def run():
+                with redirect_stdout(self.stdout_redirector), redirect_stderr(self.stderr_redirector):
+                    try:
+                        import inspect
+                        sig = inspect.signature(handler)
+                        if len(sig.parameters) > 0:
+                            handler(self.app)
+                        else:
+                            handler()
+                        logger.info("Flask scaffold completed successfully")
+                        print("\n✅ Operation completed.\n")
+                    except Exception as e:
+                        logger.error(f"Error in Flask scaffold: {e}", exc_info=True)
+                        print(f"\n❌ Error: {e}\n")
+                        import traceback
+                        traceback.print_exc()
+                    finally:
+                        self.app.set_config('_flask_scaffold_project_name', None)
+            
+            thread = threading.Thread(target=run, daemon=True, name="FlaskScaffold-Worker")
+            thread.start()
+            
+        except Exception as e:
+            logger.error(f"Error in execute_flask_scaffold_handler: {e}", exc_info=True)
+            print(f"❌ Error setting up Flask scaffold: {e}")
+    
+    def execute_start_project_handler(self, handler):
+        """Execute start_project with user input from main thread"""
+        logger = logging.getLogger(__name__)
+        logger.info("Executing start_project handler with main-thread input")
+        
+        from PyQt6.QtWidgets import QMessageBox
+        from pathlib import Path
+        
+        try:
+            venv_path = Path(".venv")
+            requirements_path = Path("requirements.txt")
+            
+            # Gather all user input in main thread
+            recreate_venv = False
+            create_requirements = False
+            
+            # Check if .venv exists and ask user
+            if venv_path.exists():
+                logger.debug("Existing .venv found, asking user if they want to recreate it")
+                reply = QMessageBox.question(
+                    self,
+                    "Virtual Environment Exists",
+                    f"A virtual environment already exists at:\n{venv_path.absolute()}\n\n"
+                    f"Do you want to delete it and create a new one?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No
+                )
+                recreate_venv = (reply == QMessageBox.StandardButton.Yes)
+                logger.info(f"User chose to recreate venv: {recreate_venv}")
+            
+            # Check if requirements.txt exists, if not ask user
+            if not requirements_path.exists():
+                logger.debug("No requirements.txt found, asking user if they want to create one")
+                reply = QMessageBox.question(
+                    self,
+                    "Create requirements.txt",
+                    "No requirements.txt found.\n\nCreate a basic requirements.txt file?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes
+                )
+                create_requirements = (reply == QMessageBox.StandardButton.Yes)
+                logger.info(f"User chose to create requirements.txt: {create_requirements}")
+            
+            # Now run the actual operation in worker thread with pre-gathered user input
+            def run():
+                with redirect_stdout(self.stdout_redirector), redirect_stderr(self.stderr_redirector):
+                    try:
+                        from .modules.python_env import PythonEnvironment
+                        
+                        logger.debug(f"Starting start_project in worker thread (recreate_venv={recreate_venv}, create_requirements={create_requirements})")
+                        
+                        # Call with pre-determined choices
+                        PythonEnvironment.start_project(
+                            recreate_venv=recreate_venv,
+                            create_requirements=create_requirements
+                        )
+                        
+                        logger.info("Start project completed successfully")
+                        print("\n✅ Operation completed.\n")
+                    except Exception as e:
+                        logger.error(f"Error in start_project: {e}", exc_info=True)
+                        print(f"\n❌ Error: {e}\n")
+                        import traceback
+                        traceback.print_exc()
+            
+            thread = threading.Thread(target=run, daemon=True, name="StartProject-Worker")
+            logger.debug(f"Starting start_project thread: {thread.name}")
+            thread.start()
+            
+        except Exception as e:
+            logger.error(f"Error in execute_start_project_handler: {e}", exc_info=True)
+            print(f"❌ Error setting up start project: {e}")
     
     def execute_power_option(self, minutes, description):
         """Execute power management shutdown option"""

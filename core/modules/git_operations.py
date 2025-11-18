@@ -36,6 +36,12 @@ class GitOperations:
         Returns:
             str: Commit message or None if cancelled
         """
+        # Check if input was pre-gathered in main thread
+        if app:
+            user_input = app.get_config('_git_user_input')
+            if user_input and 'commit_message' in user_input:
+                return user_input['commit_message']
+        
         return GitOperations._get_commit_message_gui_threadsafe()
     
     @staticmethod
@@ -407,6 +413,14 @@ class GitOperations:
         Returns:
             str: Repository URL or None if cancelled
         """
+        # Check if input was pre-gathered in main thread
+        if app:
+            user_input = app.get_config('_git_user_input')
+            if user_input and 'remote_url' in user_input:
+                return user_input['remote_url']
+            if user_input and 'new_remote_url' in user_input:
+                return user_input['new_remote_url']
+        
         return GitOperations._get_repo_url_input_gui_threadsafe()
     
     @staticmethod
@@ -460,6 +474,12 @@ class GitOperations:
         Returns:
             str: Space-separated files/folders or None if cancelled
         """
+        # Check if input was pre-gathered in main thread
+        if app:
+            user_input = app.get_config('_git_user_input')
+            if user_input and 'untrack_path' in user_input:
+                return user_input['untrack_path']
+        
         return GitOperations._get_untrack_input_gui_threadsafe()
     
     @staticmethod

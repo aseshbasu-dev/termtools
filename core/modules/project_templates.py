@@ -512,41 +512,46 @@ def create_flask_project_scaffold(app=None):
     print("\n🏗️  Flask Project Scaffold Generator")
     print("Built by Asesh Basu - TermTools")
     
-    # Get project name from user via GUI
+    # Get project name from pre-gathered config (from main thread)
     project_name = None
-    try:
-        from PyQt6.QtWidgets import QApplication, QInputDialog, QMessageBox
-        
-        if QApplication.instance():
-            text, ok = QInputDialog.getText(
-                None,
-                "Flask Project Scaffold",
-                "Enter project name:",
-                text="flask_project"  # Default value
-            )
+    if app:
+        project_name = app.get_config('_flask_scaffold_project_name')
+    
+    if not project_name:
+        # Fallback to showing dialog (shouldn't happen in GUI mode)
+        try:
+            from PyQt6.QtWidgets import QApplication, QInputDialog, QMessageBox
             
-            if ok:
-                project_name = text.strip()
-                if not project_name:
-                    project_name = "flask_project"
+            if QApplication.instance():
+                text, ok = QInputDialog.getText(
+                    None,
+                    "Flask Project Scaffold",
+                    "Enter project name:",
+                    text="flask_project"  # Default value
+                )
                 
-                # Validate project name
-                if not project_name.replace('_', '').replace('-', '').isalnum():
-                    QMessageBox.critical(
-                        None,
-                        "Invalid Project Name",
-                        "Project name should contain only letters, numbers, underscores, and hyphens."
-                    )
+                if ok:
+                    project_name = text.strip()
+                    if not project_name:
+                        project_name = "flask_project"
+                    
+                    # Validate project name
+                    if not project_name.replace('_', '').replace('-', '').isalnum():
+                        QMessageBox.critical(
+                            None,
+                            "Invalid Project Name",
+                            "Project name should contain only letters, numbers, underscores, and hyphens."
+                        )
+                        return
+                else:
+                    print("❌ Operation cancelled.")
                     return
             else:
-                print("❌ Operation cancelled.")
+                print("❌ GUI unavailable - TermTools requires GUI mode")
                 return
-        else:
-            print("❌ GUI unavailable - TermTools requires GUI mode")
+        except Exception as e:
+            print(f"❌ Error getting project name: {e}")
             return
-    except Exception as e:
-        print(f"❌ Error getting project name: {e}")
-        return
     
     # Use the ProjectTemplates class to create the scaffold
     ProjectTemplates.create_flask_scaffold(project_name)

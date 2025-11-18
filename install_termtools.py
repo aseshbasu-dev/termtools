@@ -166,7 +166,7 @@ def check_git_installed():
             check=True
         )
         version_output = result.stdout.strip()
-        print(f"✅ Git already installed: {version_output}")
+        print(f"[OK] Git already installed: {version_output}")
         return True
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return False
@@ -177,12 +177,12 @@ def install_git_for_windows():
         print("ℹ️  Git installation disabled in configuration")
         return False
     
-    print("\n🔧 Checking Git installation...")
+    print("\n[STEP] Checking Git installation...")
     
     if check_git_installed():
         return True
     
-    print("📥 Git not found. Installing Git for Windows...")
+    print("[DOWNLOAD] Git not found. Installing Git for Windows...")
     print(f"   Version: {GIT_VERSION}")
     
     temp_dir = tempfile.gettempdir()
@@ -193,10 +193,10 @@ def install_git_for_windows():
         print(f"   Downloading from: {GIT_DOWNLOAD_URL}")
         print("   This may take a few minutes depending on your connection...")
         urllib.request.urlretrieve(GIT_DOWNLOAD_URL, installer_path)
-        print("✅ Git installer downloaded successfully")
+        print("[OK] Git installer downloaded successfully")
         
         # Install Git silently
-        print("🔧 Installing Git for Windows...")
+        print("[STEP] Installing Git for Windows...")
         print("   This will install Git with default settings...")
         
         if GIT_INSTALL_SILENT:
@@ -228,12 +228,12 @@ def install_git_for_windows():
         # Clean up installer
         try:
             os.remove(installer_path)
-            print("🧹 Installer cleaned up")
+            print("[CLEANUP] Installer cleaned up")
         except Exception as e:
-            print(f"⚠️  Could not remove installer: {e}")
+            print(f"[WARNING] Could not remove installer: {e}")
         
         # Verify installation
-        print("🔍 Verifying Git installation...")
+        print("[VERIFY] Verifying Git installation...")
         
         # Add common Git paths to system PATH for this session
         git_paths = [
@@ -250,20 +250,20 @@ def install_git_for_windows():
         time.sleep(2)
         
         if check_git_installed():
-            print("✅ Git for Windows installed successfully!")
-            print("💡 Git is now available for TermTools operations")
+            print("[OK] Git for Windows installed successfully!")
+            print("[INFO] Git is now available for TermTools operations")
             return True
         else:
-            print("⚠️  Git installation completed but 'git' command not found in PATH")
+            print("[WARNING] Git installation completed but 'git' command not found in PATH")
             print("   You may need to restart your terminal or computer for PATH changes to take effect")
             print("   TermTools will still work, but Git operations require Git to be in PATH")
             return False
         
     except subprocess.TimeoutExpired:
-        print("❌ Git installation timed out after 5 minutes")
+        print("[ERROR] Git installation timed out after 5 minutes")
         return False
     except Exception as e:
-        print(f"❌ Error installing Git: {e}")
+        print(f"[ERROR] Error installing Git: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -321,12 +321,12 @@ if ctypes.windll.shell32.IsUserAnAdmin() == 0:
 
 # Use the current Python executable (script is already running, so Python exists)
 python_executable = sys.executable
-print(f"🐍 Using Python: {python_executable}")
+print(f"[PYTHON] Using Python: {python_executable}")
 
 # Install Git for Windows if not present (required for Git operations in TermTools)
 git_installed = install_git_for_windows()
 if not git_installed and INSTALL_GIT:
-    print("\n⚠️  WARNING: Git installation was not successful")
+    print("\n[WARNING] Git installation was not successful")
     print("   TermTools will install, but Git operations will not work until Git is installed")
     print("   You can manually install Git from: https://git-scm.com/download/win")
 
@@ -338,7 +338,7 @@ program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
 # ==========================================
 # CLEANUP EXISTING INSTALLATION
 # ==========================================
-print("\n🧹 Checking for existing installation...")
+print("\n[CLEANUP] Checking for existing installation...")
 
 # Remove existing Program Files installation
 target_base = os.path.join(program_files, TARGET_BASE_FOLDER)
@@ -349,9 +349,9 @@ if os.path.exists(target_app):
     print(f"   Removing old installation...")
     try:
         shutil.rmtree(target_app, ignore_errors=False)
-        print(f"   ✅ Old installation removed successfully")
+        print(f"   [OK] Old installation removed successfully")
     except Exception as e:
-        print(f"   ⚠️  Warning: Could not fully remove old installation: {e}")
+        print(f"   [WARNING] Could not fully remove old installation: {e}")
         print(f"   Will attempt to overwrite...")
 
 # Remove existing virtual environment in AppData (if using AppData location)
@@ -362,12 +362,12 @@ if VENV_IN_APPDATA:
         print(f"   Removing old virtual environment...")
         try:
             shutil.rmtree(appdata_venv_dir, ignore_errors=False)
-            print(f"   ✅ Old virtual environment removed successfully")
+            print(f"   [OK] Old virtual environment removed successfully")
         except Exception as e:
-            print(f"   ⚠️  Warning: Could not fully remove old venv: {e}")
+            print(f"   [WARNING] Could not fully remove old venv: {e}")
             print(f"   Will attempt to overwrite...")
 
-print("✅ Cleanup complete, starting fresh installation...\n")
+print("[OK] Cleanup complete, starting fresh installation...\n")
 
 # ==========================================
 # END CLEANUP
@@ -401,10 +401,10 @@ try:
             shutil.copytree(s, d, dirs_exist_ok=True)
         else:
             shutil.copy2(s, d)
-    print(f"✅ Files copied to {target_app}")
+    print(f"[OK] Files copied to {target_app}")
 
     # Create virtual environment using configuration
-    print("🔧 Setting up virtual environment...")
+    print("[STEP] Setting up virtual environment...")
     
     # Determine venv location
     if VENV_IN_APPDATA:
@@ -433,11 +433,11 @@ try:
                 timeout=5,
                 check=True
             )
-            print(f"   ✅ Existing venv is functional: {test_result.stdout.strip()}")
+            print(f"   [OK] Existing venv is functional: {test_result.stdout.strip()}")
             print("   Skipping venv recreation to avoid permission conflicts")
             venv_exists_and_works = True
         except Exception as e:
-            print(f"   ⚠️ Existing venv appears broken: {e}")
+            print(f"   [WARNING] Existing venv appears broken: {e}")
             print("   Will attempt to recreate...")
     
     # Try multiple approaches for venv creation (only if needed)
@@ -449,10 +449,10 @@ try:
             print("   Attempting with --copies flag...")
             venv_cmd = [python_executable, "-m", "venv", venv_path, "--copies"]
             result = subprocess.run(venv_cmd, capture_output=True, text=True, check=True, cwd=target_app)
-            print("✅ Virtual environment created successfully (with --copies)")
+            print("[OK] Virtual environment created successfully (with --copies)")
             venv_created = True
         except subprocess.CalledProcessError as e:
-            print(f"⚠️  First attempt failed: {e}")
+            print(f"[WARNING] First attempt failed: {e}")
             if e.stderr:
                 print(f"   {e.stderr.strip()}")
     
@@ -462,10 +462,10 @@ try:
             print("   Attempting without --copies flag...")
             venv_cmd = [python_executable, "-m", "venv", venv_path]
             result = subprocess.run(venv_cmd, capture_output=True, text=True, check=True, cwd=target_app)
-            print("✅ Virtual environment created successfully (without --copies)")
+            print("[OK] Virtual environment created successfully (without --copies)")
             venv_created = True
         except subprocess.CalledProcessError as e:
-            print(f"⚠️  Second attempt failed: {e}")
+            print(f"[WARNING] Second attempt failed: {e}")
             if e.stderr:
                 print(f"   {e.stderr.strip()}")
     
@@ -475,33 +475,33 @@ try:
             print("   Attempting with --system-site-packages flag...")
             venv_cmd = [python_executable, "-m", "venv", venv_path, "--system-site-packages"]
             result = subprocess.run(venv_cmd, capture_output=True, text=True, check=True, cwd=target_app)
-            print("✅ Virtual environment created successfully (with --system-site-packages)")
+            print("[OK] Virtual environment created successfully (with --system-site-packages)")
             venv_created = True
         except subprocess.CalledProcessError as e:
-            print(f"⚠️  Third attempt failed: {e}")
+            print(f"[WARNING] Third attempt failed: {e}")
             if e.stderr:
                 print(f"   {e.stderr.strip()}")
     
     if not venv_created:
-        print("❌ All virtual environment creation attempts failed")
-        print("❌ CRITICAL ERROR: TermTools REQUIRES a virtual environment to run")
+        print("[ERROR] All virtual environment creation attempts failed")
+        print("[ERROR] CRITICAL ERROR: TermTools REQUIRES a virtual environment to run")
         print("   Installation cannot continue without a working virtual environment.")
-        print("\n💡 Troubleshooting tips:")
+        print("\n[INFO] Troubleshooting tips:")
         print("   1. Ensure Python was installed with 'pip' support")
         print("   2. Try running: python -m ensurepip --upgrade")
         print("   3. Check that you have write permissions to the AppData directory")
         print(f"   4. Attempted venv location: {venv_path}")
         raise RuntimeError("Failed to create virtual environment - TermTools installation aborted")
     else:
-        print(f"✅ Virtual environment ready at: {venv_path}")
+        print(f"[OK] Virtual environment ready at: {venv_path}")
 
     # Install requirements if requirements.txt exists and enabled
     requirements_path = os.path.join(target_app, REQUIREMENTS_FILE)
     if INSTALL_REQUIREMENTS and os.path.exists(requirements_path):
         if venv_exists_and_works:
-            print(f"🔧 Updating dependencies from {REQUIREMENTS_FILE}...")
+            print(f"[STEP] Updating dependencies from {REQUIREMENTS_FILE}...")
         else:
-            print(f"🔧 Installing requirements from {REQUIREMENTS_FILE}...")
+            print(f"[STEP] Installing requirements from {REQUIREMENTS_FILE}...")
         
         # CRITICAL: Only use virtual environment (system Python fallback removed)
         print("   Using virtual environment Python...")
@@ -509,7 +509,7 @@ try:
         
         # Verify venv python exists (should always exist if we got here)
         if not os.path.exists(venv_python):
-            print(f"❌ CRITICAL: Virtual environment Python not found at: {venv_python}")
+            print(f"[ERROR] CRITICAL: Virtual environment Python not found at: {venv_python}")
             raise RuntimeError("Virtual environment is corrupted or incomplete")
         
         # Always use python -m pip instead of direct pip executable for reliability
@@ -521,9 +521,9 @@ try:
                 print("   Upgrading pip in virtual environment...")
                 result = subprocess.run(pip_cmd_base + ["install", "--upgrade", "pip"], 
                                       capture_output=True, text=True, check=True, cwd=target_app)
-                print("✅ Pip upgraded successfully")
+                print("[OK] Pip upgraded successfully")
             except subprocess.CalledProcessError as e:
-                print(f"⚠️  Warning: Could not upgrade pip: {e}")
+                print(f"[WARNING] Could not upgrade pip: {e}")
                 if e.stderr:
                     print(f"   {e.stderr.strip()}")
                 # Continue anyway - pip might still work for installation
@@ -533,11 +533,11 @@ try:
             print("   Installing requirements to virtual environment...")
             result = subprocess.run(pip_cmd_base + ["install", "-r", REQUIREMENTS_FILE], 
                                   capture_output=True, text=True, check=True, cwd=target_app)
-            print("✅ Requirements installed successfully")
+            print("[OK] Requirements installed successfully")
             if result.stdout:
                 print(f"   {result.stdout.strip()}")
         except subprocess.CalledProcessError as e:
-            print(f"⚠️  Error installing requirements: {e}")
+            print(f"[WARNING] Error installing requirements: {e}")
             if e.stderr:
                 print(f"   {e.stderr.strip()}")
             
@@ -553,12 +553,12 @@ try:
                     # Retry installation
                     result = subprocess.run(pip_cmd_base + ["install", "-r", REQUIREMENTS_FILE], 
                                           capture_output=True, text=True, check=True, cwd=target_app)
-                    print("✅ Requirements installed successfully after pip bootstrap")
+                    print("[OK] Requirements installed successfully after pip bootstrap")
                 except subprocess.CalledProcessError as bootstrap_e:
-                    print(f"❌ CRITICAL: Pip bootstrap failed: {bootstrap_e}")
+                    print(f"[ERROR] CRITICAL: Pip bootstrap failed: {bootstrap_e}")
                     raise RuntimeError("Failed to install requirements - TermTools needs wxPython to run")
             else:
-                print(f"❌ CRITICAL: Requirements installation failed")
+                print(f"[ERROR] CRITICAL: Requirements installation failed")
                 raise RuntimeError("Failed to install requirements - TermTools needs wxPython to run")
     else:
         if not INSTALL_REQUIREMENTS:
@@ -567,38 +567,38 @@ try:
             print(f"ℹ️  No {REQUIREMENTS_FILE} found, skipping dependency installation")
 
     # Set up context menu with venv Python
-    print("🔧 Setting up context menu with virtual environment Python...")
+    print("[STEP] Setting up context menu with virtual environment Python...")
     try:
         setup_context_menu_with_venv(target_app, venv_path)
-        print("✅ Context menu configured successfully")
+        print("[OK] Context menu configured successfully")
     except Exception as e:
-        print(f"❌ Error setting up context menu: {e}")
+        print(f"[ERROR] Error setting up context menu: {e}")
         raise
 
     # Get remote commit hash and save installation metadata
-    print("🔧 Saving installation metadata...")
+    print("[STEP] Saving installation metadata...")
     commit_hash = get_remote_head_sha(REPO_OWNER, REPO_NAME, REPO_BRANCH)
     save_installation_metadata(target_app, REPO_OWNER, REPO_NAME, commit_hash)
 
-    print(f"\n🎉 {TARGET_APP_FOLDER} installation completed successfully!")
-    print(f"📍 Installation location: {target_app}")
-    print(f"🐍 Virtual environment: {venv_path}")
-    print(f"📝 Right-click context menu added - you can now run {TARGET_APP_FOLDER} from any folder")
+    print(f"\n[SUCCESS] {TARGET_APP_FOLDER} installation completed successfully!")ully!")
+    print(f"[LOCATION] Installation location: {target_app}")
+    print(f"[VENV] Virtual environment: {venv_path}")
+    print(f"[MENU] Right-click context menu added - you can now run {TARGET_APP_FOLDER} from any folder")
     
     # Check and report Git status
     if check_git_installed():
-        print(f"✅ Git is installed and ready for Git operations")
+        print(f"[OK] Git is installed and ready for Git operations")
     else:
-        print(f"⚠️  Git is not available - Git operations will not work")
+        print(f"[WARNING] Git is not available - Git operations will not work")
         print(f"   Install Git from: https://git-scm.com/download/win")
     
-    print(f"\n⚠️  IMPORTANT: TermTools runs ONLY from its virtual environment")
+    print(f"\n[IMPORTANT] TermTools runs ONLY from its virtual environment")
     print(f"   Do not delete the virtual environment at: {venv_path}")
 
 finally:
     if CLEANUP_ON_ERROR:
-        print("\n🧹 Cleaning up temporary files...")
+        print("\n[CLEANUP] Cleaning up temporary files...")
         shutil.rmtree(tempdir, ignore_errors=True)
-        print("✅ Cleanup completed")
+        print("[OK] Cleanup completed")
     else:
-        print(f"\n🧹 Temporary files left in: {tempdir} (cleanup disabled in configuration)")
+        print(f"\n[CLEANUP] Temporary files left in: {tempdir} (cleanup disabled in configuration)")

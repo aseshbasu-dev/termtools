@@ -20,13 +20,15 @@ def _get_subprocess_flags():
     return {}
 
 
-# Import PyQt6 for GUI confirmations
+# Import PyQt6 for GUI confirmations and QProcess
 try:
     from PyQt6.QtWidgets import QApplication, QMessageBox, QInputDialog
+    from PyQt6.QtCore import QProcess
 except ImportError:
     QApplication = None
     QMessageBox = None
     QInputDialog = None
+    QProcess = None
 
 # Create the blueprint for Python environment management
 python_env_bp = Blueprint("python_env", "Python environment and dependency management")
@@ -767,7 +769,7 @@ Specify the license for your project.
             print(f"❌ Error creating README.md: {e}")
     
     @staticmethod
-    def start_project():
+    def start_project(recreate_venv=None, create_requirements=None):
         """
         Start project development environment:
         1. Create .venv if not exists (with optional overwrite)
@@ -775,11 +777,16 @@ Specify the license for your project.
         3. Install requirements.txt if exists or create it if not
         4. Open VS Code with 'code .'
         
+        Args:
+            recreate_venv: Pre-determined choice to recreate venv (True/False/None)
+            create_requirements: Pre-determined choice to create requirements.txt (True/False/None)
+        
         VS Code opens regardless of previous step completion.
         """
         print("\n🚀 Starting project development environment...")
         
         venv_path = Path(".venv")
+        venv_is_valid = False
         
         # Step 1: Handle virtual environment
         print("[1/4] 🐍 Setting up virtual environment...")
@@ -787,29 +794,65 @@ Specify the license for your project.
         if venv_path.exists():
             print("ℹ️  A virtual environment already exists.")
             
-            message = f"A virtual environment already exists at:\n{venv_path.absolute()}\n\nDo you want to delete it and create a new one?"
-            if PythonEnvironment._show_gui_confirmation(message, "Virtual Environment Exists"):
+            # Check if venv is valid before attempting to delete
+            if recreate_venv:
+                print("\n⚠️  IMPORTANT: Deleting .venv while the application is running may fail!")
+                print("💡 If deletion fails, please:")
+                print("   1. Close TermTools")
+                print("   2. Manually delete the .venv folder")
+                print("   3. Run TermTools again and use 'Start Project'")
+                print("")
+                
                 try:
-                    print("🗑️  Deleting existing .venv...")
+                    print("🗑️  Attempting to delete existing .venv...")
                     shutil.rmtree(venv_path)
-                    print("✅ Existing .venv deleted.")
+                    print("✅ Existing .venv deleted successfully.")
                     
                     print("🔨 Creating new virtual environment...")
                     venv.create(venv_path, with_pip=True)
                     print("✅ New virtual environment created.")
+                    venv_is_valid = True
+                except PermissionError as e:
+                    print(f"❌ Cannot delete .venv - files are locked (application is running).")
+                    print(f"   Error: {e}")
+                    print("\n⚠️  SOLUTION:")
+                    print("   1. Close TermTools completely")
+                    print("   2. Manually delete the .venv folder")
+                    print("   3. Re-run TermTools and use 'Start Project' again")
+                    print("\n❌ Aborting operation - cannot proceed with broken .venv")
+                    return
                 except Exception as e:
                     print(f"❌ Error managing virtual environment: {e}")
-                    print("⚠️  Continuing with remaining steps...")
+                    print("\n⚠️  SOLUTION:")
+                    print("   1. Close TermTools completely")
+                    print("   2. Manually delete the .venv folder")
+                    print("   3. Re-run TermTools and use 'Start Project' again")
+                    print("\n❌ Aborting operation - cannot proceed with broken .venv")
+                    return
             else:
+                # Keep existing venv - verify it's valid
                 print("✅ Keeping existing virtual environment.")
+                # Check if pip exists to verify venv is valid
+                if os.name == 'nt':
+                    pip_check = venv_path / "Scripts" / "pip.exe"
+                else:
+                    pip_check = venv_path / "bin" / "pip"
+                
+                if pip_check.exists():
+                    venv_is_valid = True
+                else:
+                    print("⚠️  WARNING: Virtual environment appears to be corrupted (pip not found).")
+                    print("💡 Consider deleting .venv manually and running 'Start Project' again.")
         else:
             try:
                 print("🔨 Creating virtual environment...")
                 venv.create(venv_path, with_pip=True)
                 print("✅ Virtual environment created successfully.")
+                venv_is_valid = True
             except Exception as e:
                 print(f"❌ Error creating virtual environment: {e}")
-                print("⚠️  Continuing with remaining steps...")
+                print("⚠️  Cannot proceed without a valid virtual environment.")
+                return
         
         # Step 2: Activate virtual environment (informational - actual activation in VS Code terminal)
         print("\n[2/4] 🔧 Virtual environment activation...")
@@ -824,20 +867,35 @@ Specify the license for your project.
         # Step 3: Open VS Code (this should happen regardless)
         print("\n[3/4] 📝 Opening VS Code...")
         try:
-            if os.name == 'nt':  # Windows
-                subprocess.Popen(['code', '.'], shell=True, **_get_subprocess_flags())
-            else:  # Unix-like systems
-                subprocess.Popen(['code', '.'], **_get_subprocess_flags())
-            print("✅ VS Code opened successfully.")
+            # Use PyQt6 QProcess for better cross-platform process handling
+            if QProcess is not None:
+                # QProcess.startDetached is the PyQt way to start external applications
+                # It returns a tuple (success, pid) on success
+                success = QProcess.startDetached('code', ['.'])
+                if success:
+                    print("✅ VS Code opened successfully.")
+                else:
+                    print("⚠️  Could not open VS Code automatically.")
+                    print("💡 You can manually open VS Code by running: code .")
+            else:
+                # Fallback if PyQt6 is not available (should not happen in GUI mode)
+                if os.name == 'nt':  # Windows
+                    subprocess.Popen(['code', '.'], shell=True)
+                else:  # Unix-like systems
+                    subprocess.Popen(['code', '.'])
+                print("✅ VS Code opened successfully.")
         except Exception as e:
             print(f"⚠️  Could not open VS Code automatically: {e}")
             print("💡 You can manually open VS Code by running: code .")
         
-        # Step 4: Handle requirements.txt
+        # Step 4: Handle requirements.txt (only if venv is valid)
         print("\n[4/4] 📦 Managing requirements...")
         requirements_path = Path("requirements.txt")
         
-        if requirements_path.exists():
+        if not venv_is_valid:
+            print("⚠️  Skipping requirements installation - virtual environment is not valid.")
+            print("💡 Fix the .venv issue first, then manually run: pip install -r requirements.txt")
+        elif requirements_path.exists():
             print("ℹ️  Found existing requirements.txt file.")
             try:
                 # Get the appropriate pip path for the virtual environment
@@ -846,22 +904,27 @@ Specify the license for your project.
                 else:  # Unix-like systems
                     pip_path = venv_path / "bin" / "pip"
                 
-                print("📥 Installing requirements...")
-                result = subprocess.run([str(pip_path), 'install', '-r', 'requirements.txt'], 
-                                      capture_output=True, text=True, **_get_subprocess_flags())
-                
-                if result.returncode == 0:
-                    print("✅ Requirements installed successfully.")
-                    if result.stdout.strip():
-                        # Show some output but not too verbose
-                        lines = result.stdout.strip().split('\n')
-                        for line in lines[-5:]:  # Show last 5 lines
-                            print(f"   {line}")
+                # Verify pip exists
+                if not pip_path.exists():
+                    print("❌ pip not found in virtual environment - .venv may be corrupted.")
+                    print("💡 Delete .venv manually and run 'Start Project' again.")
                 else:
-                    print(f"❌ Error installing requirements:")
-                    if result.stderr:
-                        print(f"   {result.stderr.strip()}")
-                    print("💡 You can manually install by running: pip install -r requirements.txt")
+                    print("📥 Installing requirements...")
+                    result = subprocess.run([str(pip_path), 'install', '-r', 'requirements.txt'], 
+                                          capture_output=True, text=True, **_get_subprocess_flags())
+                    
+                    if result.returncode == 0:
+                        print("✅ Requirements installed successfully.")
+                        if result.stdout.strip():
+                            # Show some output but not too verbose
+                            lines = result.stdout.strip().split('\n')
+                            for line in lines[-5:]:  # Show last 5 lines
+                                print(f"   {line}")
+                    else:
+                        print(f"❌ Error installing requirements:")
+                        if result.stderr:
+                            print(f"   {result.stderr.strip()}")
+                        print("💡 You can manually install by running: pip install -r requirements.txt")
                         
             except Exception as e:
                 print(f"❌ Error installing requirements: {e}")
@@ -869,11 +932,7 @@ Specify the license for your project.
         else:
             print("ℹ️  No requirements.txt found.")
             
-            message = "Create a basic requirements.txt file?"
-            choices = ["Yes", "No"]
-            choice = PythonEnvironment._show_gui_choice(message, "Create requirements.txt", choices, default_choice=0)
-            
-            if choice == 0:  # Yes
+            if create_requirements:  # Decision already made in main thread
                 try:
                     # Create basic requirements.txt
                     basic_requirements = """# Basic Python requirements
@@ -903,25 +962,28 @@ Specify the license for your project.
 @python_env_bp.route("2", "Create new .venv", "With .gitignore and requirements.txt options", "🐍 PYTHON ENVIRONMENT MANAGEMENT", 1)
 def create_new_venv(app=None):
     """Create new .venv with optional .gitignore and requirements.txt files"""
-    PythonEnvironment.create_new_venv()
+    PythonEnvironment.create_new_venv(app)
 
 
 @python_env_bp.route("2.5", "Start Project", "Create .venv if not exist, activate .venv, install requirements.txt if exists or create it, run code .", "🚀 PROJECT DEVELOPMENT", 0)
 def start_project(app=None):
     """Start project development environment"""
-    PythonEnvironment.start_project()
+    # This function should NOT be called directly from GUI
+    # The GUI should use a special handler that gathers input first
+    # For now, call with defaults (no user input)
+    PythonEnvironment.start_project(recreate_venv=False, create_requirements=False)
 
 
 @python_env_bp.route("3", "Create new requirements.txt file", "Choose from templates", "🐍 PYTHON ENVIRONMENT MANAGEMENT", 2)
 def create_requirements_file(app=None):
     """Create a new requirements.txt file with template options"""
-    PythonEnvironment.create_requirements_file()
+    PythonEnvironment.create_requirements_file(app)
 
 
 @python_env_bp.route("4", "Delete .venv folders recursively", "Recursive search", "🐍 PYTHON ENVIRONMENT MANAGEMENT", 3)
 def delete_all_venvs(app=None):
     """Delete all .venv folders recursively"""
-    PythonEnvironment.delete_all_venvs()
+    PythonEnvironment.delete_all_venvs(app)
 
 
 # Initialize blueprint on import
